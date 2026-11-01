@@ -1,70 +1,39 @@
-# Contributing
+# Contributing to AITOOLS
 
-感谢关注 AINoteBook。提交代码前请先阅读以下约定。
+感谢关注 AITOOLS。本仓库包含多个独立 AI 工具，每个工具拥有自己的依赖、文档与测试方式。
 
-## 环境
+## 项目
 
-- Node.js 20 及以上
-- Chrome 或 Edge（PDF 预览与本地 E2E 自测）
-- 所有数据保存在浏览器本地 IndexedDB，没有后端或账号系统
+- [AINoteBook](AINoteBook/README.md) — 本地优先 Markdown 笔记应用
+  - 项目开发、自测与提交约定：[AINoteBook/CONTRIBUTING.md](AINoteBook/CONTRIBUTING.md)
 
-## 本地开发
+## 仓库级约定
 
-当前项目位于 `AINoteBook/` 子目录：
-
-```bash
-cd AINoteBook
-npm ci
-npm run dev
-```
-
-开发服务器默认固定在 <http://localhost:5174>。如需并行运行第二个实例：
-
-```bash
-npm run dev -- --port 5173
-```
-
-端口不同代表不同的浏览器源，IndexedDB 数据互不共享。
-
-## 提交前检查
-
-在 `AINoteBook/` 目录执行：
-
-```bash
-npm run check
-```
-
-该命令会执行 TypeScript 类型检查并完成生产构建。
-
-## 端到端自测（可选）
-
-在 `AINoteBook/` 目录执行。自测脚本依赖本机 Chrome 与临时安装的 Puppeteer：
-
-```bash
-npm install --no-save puppeteer-core
-npm run dev -- --port 5173
-node scripts/check-stage1.mjs
-# 依次运行 check-stage2 ~ check-stage5、check-note-layout、check-image、check-callout、check-table
-```
-
-脚本内的 Chrome 路径与测试端口目前按 Windows 本地环境配置；在其他系统运行时请修改脚本顶部的 `CHROME` 与 `URL` 常量。
+- 从 `main` 创建功能分支，例如 `feat/table-shortcuts`、`fix/export-image`。
+- 一个 PR 尽量只解决一个问题；PR 中注明受影响项目（如 `AINoteBook`）。
+- 修改项目代码前，先阅读对应子目录的 README 与 CONTRIBUTING。
+- 提交前在目标项目目录执行其类型检查 / 构建 / 测试命令。
+- 不要提交 `node_modules/`、`dist/`、`.tmp-*`、个人数据、密钥或令牌。
+- 文档变更同步更新对应 README / CHANGELOG。
 
 ## 新增工具
 
-在仓库根目录创建新的同级目录，并：
+在仓库根目录创建一个新的同级目录，例如：
 
-1. 添加子目录 `README.md`；
-2. 添加独立依赖清单与锁文件；
-3. 更新根 `README.md` 的项目列表；
-4. 如需 CI，在 `.github/workflows/ci.yml` 增加对应 job 与路径过滤。
+```text
+AITOOLS/
+├─ AINoteBook/
+├─ YourTool/
+└─ README.md
+```
 
-## 提交与 PR
+新工具至少应包含：
 
-- 从 `main` 创建功能分支，例如 `feat/table-shortcuts`、`fix/export-image`。
-- PR 中注明受影响项目（如 `AINoteBook`）。
-- 提交信息使用简洁的英文祈使句，例如 `fix: keep table width after resize`。
-- 一个 PR 尽量只解决一个问题；在 PR 描述中填写复现步骤、测试结果与截图。
-- 提交前确认没有把 `node_modules/`、`dist/`、`.tmp-*`、个人数据或密钥加入版本库。
+1. 子目录内的 `README.md`，说明功能、启动方式与限制；
+2. 独立的依赖清单与锁文件；
+3. 子目录内的 `CONTRIBUTING.md`（如有项目级约定）；
+4. 在根 README 的「项目」列表中添加入口；
+5. 如需 CI，在 `.github/workflows/ci.yml` 增加对应 job 与路径过滤。
 
 ## 许可证
 

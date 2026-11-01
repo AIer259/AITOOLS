@@ -143,6 +143,7 @@ AITOOLS/
 │  ├─ docs/screenshots/  # README 截图
 │  ├─ public/            # 静态资源
 │  ├─ CHANGELOG.md
+│  ├─ CONTRIBUTING.md
 │  └─ package.json
 ├─ .github/              # CI、Issue / PR 模板
 ├─ CONTRIBUTING.md
@@ -192,7 +193,7 @@ node scripts/check-table.mjs
 
 ## 贡献
 
-欢迎提交 Issue 或 PR。开发、自测与提交约定见 [CONTRIBUTING.md](../CONTRIBUTING.md)；版本变更见 [CHANGELOG.md](CHANGELOG.md)。
+欢迎提交 Issue 或 PR。开发、自测与提交约定见 [CONTRIBUTING.md](CONTRIBUTING.md)；仓库级规则见 [AITOOLS CONTRIBUTING](../CONTRIBUTING.md)；版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 许可证
 

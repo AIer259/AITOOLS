@@ -22,6 +22,7 @@ npm run dev
 - 打开 <http://localhost:5174>
 - 文档：[功能与使用说明](AINoteBook/README.md)
 - 变更记录：[AINoteBook/CHANGELOG.md](AINoteBook/CHANGELOG.md)
+- 项目贡献说明：[AINoteBook/CONTRIBUTING.md](AINoteBook/CONTRIBUTING.md)
 
 ## 新增工具
 
