@@ -9,6 +9,16 @@ body:
       value: |
         感谢反馈。请尽量提供可复现步骤和运行环境，避免只写“不能用”。
 
+  - type: dropdown
+    id: project
+    attributes:
+      label: 受影响项目
+      options:
+        - AINoteBook
+        - 仓库基础设施 / 其他
+    validations:
+      required: true
+
   - type: textarea
     id: description
     attributes:

@@ -9,6 +9,16 @@ body:
       value: |
         请先描述要解决的问题，再给出建议方案；具体实现方式可以留空。
 
+  - type: dropdown
+    id: project
+    attributes:
+      label: 受影响项目
+      options:
+        - AINoteBook
+        - 仓库基础设施 / 其他
+    validations:
+      required: true
+
   - type: textarea
     id: problem
     attributes:

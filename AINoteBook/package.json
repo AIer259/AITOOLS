@@ -7,9 +7,10 @@
   "author": "AIer259",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AIer259/AITOOLS.git"
+    "url": "git+https://github.com/AIer259/AITOOLS.git",
+    "directory": "AINoteBook"
   },
-  "homepage": "https://github.com/AIer259/AITOOLS#readme",
+  "homepage": "https://github.com/AIer259/AITOOLS/tree/main/AINoteBook#readme",
   "bugs": {
     "url": "https://github.com/AIer259/AITOOLS/issues"
   },

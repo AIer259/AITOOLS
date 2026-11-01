@@ -2,13 +2,18 @@
 
 <!-- 简要说明这个 PR 做了什么、为什么需要。 -->
 
+## 受影响项目
+
+- [ ] AINoteBook
+- [ ] 仓库基础设施 / 其他
+
 ## 关联 Issue
 
 <!-- 例如 Closes #12；没有可写“无”。 -->
 
 ## 测试
 
-- [ ] `npm run check`
+- [ ] `cd AINoteBook && npm run check`
 - [ ] 相关 E2E 自测（如适用）
 - [ ] 手动验证关键交互
 
