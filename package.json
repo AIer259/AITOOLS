@@ -1,0 +1,67 @@
+{
+  "name": "ainotebook",
+  "private": true,
+  "version": "0.1.0",
+  "description": "本地优先的精简 Markdown 笔记应用，支持复杂表格、着重块、图片、嵌套文档与 PDF 导出。",
+  "license": "MIT",
+  "author": "AIer259",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AIer259/AITOOLS.git"
+  },
+  "homepage": "https://github.com/AIer259/AITOOLS#readme",
+  "bugs": {
+    "url": "https://github.com/AIer259/AITOOLS/issues"
+  },
+  "keywords": [
+    "notes",
+    "markdown",
+    "local-first",
+    "tiptap",
+    "react",
+    "indexeddb",
+    "pdf"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.32.2",
+    "@tiptap/extension-details": "^3.32.2",
+    "@tiptap/extension-list": "^3.32.2",
+    "@tiptap/extension-placeholder": "^3.32.2",
+    "@tiptap/extension-table": "^3.32.2",
+    "@tiptap/pm": "^3.32.2",
+    "@tiptap/react": "^3.32.2",
+    "@tiptap/starter-kit": "^3.32.2",
+    "@tiptap/suggestion": "^3.32.2",
+    "html2canvas": "^1.4.1",
+    "idb-keyval": "^6.3.0",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.2",
+    "lucide-react": "^1.66.0",
+    "mammoth": "^1.13.0",
+    "marked": "^18.1.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/turndown": "^5.0.6",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.5"
+  }
+}
