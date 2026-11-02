@@ -6,8 +6,6 @@
 
 **在线站点**：<https://aier259.github.io/AITOOLS/>
 
-站点由 `site/` 工具索引页与各工具构建产物组成，推送到 `main` 后由 GitHub Actions 自动发布。首次发布前，在仓库 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。
-
 ## 项目
 
 ### [AINoteBook](AINoteBook/README.md)
