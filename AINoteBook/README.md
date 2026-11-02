@@ -8,6 +8,8 @@
 
 所有数据保存在浏览器 IndexedDB，没有后端、账号或云同步。
 
+**在线使用**：<https://aier259.github.io/AITOOLS/AINoteBook/>（线上版与本地开发版数据独立）
+
 > 本目录是 [AITOOLS](../README.md) 仓库中的 AINoteBook 项目。
 
 | 深色模式 | 浅色模式 |
@@ -82,6 +84,15 @@ npm run build
 npm run preview
 ```
 
+## 在线更新
+
+线上版启动后会读取同源的 `AINoteBook/version.json`，与当前构建版本比较：
+
+- 发现新版本时弹窗显示当前版本与最新版本；选择「立即更新」会重新加载页面，加载最新构建；选择「稍后」在本次会话内不再提示。
+- 更新只刷新页面，不会清空或迁移 IndexedDB 中的笔记。
+- `npm run dev` 本地开发版不执行检测，避免反复弹窗；本地代码更新仍使用 `git pull`。
+- 线上版与 `http://localhost:5174` 属于不同浏览器源，数据互不共享。
+
 ## 使用提示
 
 | 操作 | 方式 |
@@ -136,6 +147,7 @@ PDF：
 - PDF / Word 原始文件：IndexedDB（`ainb.blob.*`）
 - 图片资源：IndexedDB（`ainb.assets.meta` 元数据 + `ainb.asset.<sha256>` 二进制）
 - 当前文档、主题：localStorage
+- 更新提示的「稍后」记录：sessionStorage（会话级，关闭标签页后失效）
 - 启动时尝试申请持久化存储；左下角显示已用容量 / 配额与持久化状态
 - 没有后端、账号与云同步；清除浏览器站点数据会丢失全部笔记与图片，请用导出功能备份
 
@@ -158,10 +170,13 @@ AITOOLS/
 │  ├─ scripts/           # Puppeteer 端到端自测
 │  ├─ docs/screenshots/  # README 截图
 │  ├─ public/            # 静态资源
+│  ├─ vite.config.ts
+│  ├─ vite.pages.config.ts
 │  ├─ CHANGELOG.md
 │  ├─ CONTRIBUTING.md
 │  └─ package.json
-├─ .github/              # CI、Issue / PR 模板
+├─ site/                 # 工具集合站首页
+├─ .github/              # CI、Issue / PR 模板、Pages 部署
 ├─ CONTRIBUTING.md
 ├─ LICENSE
 └─ README.md             # AITOOLS 工具索引
@@ -173,6 +188,7 @@ AITOOLS/
 | --- | --- |
 | `npm run dev` | 启动开发服务器，默认 <http://localhost:5174> |
 | `npm run build` | TypeScript 类型检查 + 生产构建 |
+| `npm run build:pages` | 以 `/AITOOLS/AINoteBook/` 为 base 构建 GitHub Pages 版本 |
 | `npm run typecheck` | 仅执行 TypeScript 类型检查 |
 | `npm run check` | CI 使用的类型检查 + 构建 |
 | `npm run preview` | 预览生产构建 |
@@ -196,7 +212,15 @@ node scripts/check-toolbar.mjs
 node scripts/check-toc.mjs
 ```
 
-脚本目前按 Windows 本地环境配置 Chrome 路径与 5173 端口；其他系统请修改脚本顶部的 `CHROME` 与 `URL`，或为 `check-codeblock.mjs` / `check-link.mjs` / `check-toolbar.mjs` / `check-toc.mjs` 设置 `APP_URL` / `CHROME_PATH` 环境变量。自测会产生 `.tmp-*` 临时目录，可直接删除。CI 仅执行类型检查与构建，不运行浏览器自测。
+更新检测使用生产构建预览：
+
+```bash
+npm run build
+npm run preview -- --port 4173
+node scripts/check-update.mjs
+```
+
+脚本目前按 Windows 本地环境配置 Chrome 路径与 5173 端口；其他系统请修改脚本顶部的 `CHROME` 与 `URL`，或为 `check-codeblock.mjs` / `check-link.mjs` / `check-toolbar.mjs` / `check-toc.mjs` / `check-update.mjs` 设置 `APP_URL` / `CHROME_PATH` 环境变量。自测会产生 `.tmp-*` 临时目录，可直接删除。CI 仅执行类型检查与构建，不运行浏览器自测。
 
 ## 已知限制
 
@@ -211,7 +235,8 @@ node scripts/check-toc.mjs
 - 附件文件夹名按嵌入时的主文件名生成，之后重命名主笔记不会自动改名。
 - 直接下载的 PDF 为图片型，文字不可检索；分页会避开文字行、表格行、图片与代码块边界，部分页面底部可能留白。
 - 自动链接只识别以 `http://`、`https://` 或 `www.` 开头的明确网址；裸域名（如 `example.com`）不会自动链接，避免文件名被误判。
-- 暂不支持拖拽移动节点、多人协作、回收站与版本历史。
+- 线上版与本地开发版的浏览器存储按源隔离，笔记不互通；迁移请使用 Markdown / ZIP 导出与导入。
+- 暂不支持多人协作、回收站与版本历史。
 
 ## 贡献
 

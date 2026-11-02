@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AIer259 的个人 AI 工具集合，每个工具独立构建、独立发布。"
+    />
+    <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13151a" media="(prefers-color-scheme: dark)" />
+    <title>AITOOLS · AI 工具集合</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="AITOOLS 首页">
+        <span class="brand-mark">AI</span>
+        <span class="brand-name">AITOOLS</span>
+      </a>
+      <a
+        class="repo-link"
+        href="https://github.com/AIer259/AITOOLS"
+        target="_blank"
+        rel="noreferrer"
+      >
+        GitHub
+      </a>
+    </header>
+
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">AI TOOLBOX</p>
+        <h1>个人 AI 工具集合</h1>
+        <p class="lead">每个工具独立构建、独立发布，数据尽量留在本地。</p>
+      </section>
+
+      <section class="tool-grid" id="tool-grid" aria-label="工具列表"></section>
+
+      <noscript>
+        <ul class="fallback-list">
+          <li><a href="./AINoteBook/">AINoteBook — 本地优先的 Markdown 笔记应用</a></li>
+        </ul>
+      </noscript>
+    </main>
+
+    <footer class="site-footer">
+      <span>© 2026 AIer259</span>
+      <a
+        href="https://github.com/AIer259/AITOOLS/blob/main/LICENSE"
+        target="_blank"
+        rel="noreferrer"
+      >
+        MIT License
+      </a>
+    </footer>
+
+    <script type="module" src="./tools.js"></script>
+  </body>
+</html>

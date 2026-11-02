@@ -2,7 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-个人 AI 工具集合。每个工具一个独立子目录，拥有自己的依赖、文档与发布节奏。
+个人 AI 工具集合。每个工具一个独立子目录，拥有自己的依赖、文档与发布节奏；构建产物统一发布到 GitHub Pages 工具集合站。
+
+**在线站点**：<https://aier259.github.io/AITOOLS/>
+
+站点由 `site/` 工具索引页与各工具构建产物组成，推送到 `main` 后由 GitHub Actions 自动发布。首次发布前，在仓库 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。
 
 ## 项目
 
@@ -10,10 +14,13 @@
 
 本地优先的精简 Markdown 笔记应用，当前版本 **v0.12.0**。支持工作区浏览与拖拽整理、Markdown + 图片跨设备导入、嵌入文档附件归档与 ZIP 往返、复杂表格、着重块、代码块语言与语法高亮、图片、目录层级折叠与 PDF 导出。
 
+**在线使用**：<https://aier259.github.io/AITOOLS/AINoteBook/>
+
 - 工作区：点击「空间 / 私人」或文件夹进入列表，顶部面包屑逐级回退，侧栏支持拖拽整理
 - 嵌入文档：自动归档到 `<主文件名>附件`，可随 Markdown ZIP 一起导出并在另一台电脑恢复
 - 图片导入：支持 Markdown + 图片 ZIP 与单文件 data URI，写入本地资源库
 - 目录与附件：目录默认只显示一、二级；附件文件夹默认折叠；删除主文件同步删除附件
+- 在线更新：线上版启动时读取同源 `version.json`，发现新版本可一键刷新加载
 - 技术栈：React · TypeScript · Vite · Tiptap · Zustand · IndexedDB
 - 启动：
 
@@ -44,14 +51,21 @@ AITOOLS/
 1. 子目录内的 `README.md`，说明功能、启动方式与限制；
 2. 自己的依赖清单与锁文件（如 `package.json` / `package-lock.json`）；
 3. 如需 CI，更新 `.github/workflows/ci.yml`，增加对应 job 与路径过滤；
-4. 在根 README 的「项目」列表中添加入口。
+4. 在根 README 的「项目」列表中添加入口；
+5. 在 `site/tools.js` 的 `tools` 数组添加工具卡片数据（名称、描述、链接、标签）；
+6. 在 `.github/workflows/deploy.yml` 增加该工具的构建步骤，并把构建产物复制到 `.tmp-site/<工具名>/`；
+7. 所有工具运行在同一个 Pages 源下，浏览器存储需使用自己的前缀，避免 IndexedDB / localStorage 键冲突。
 
 ## 仓库结构
 
 ```text
 AITOOLS/
 ├─ AINoteBook/            # 笔记应用
+├─ site/                  # 工具集合站首页（静态）
 ├─ .github/               # CI、Issue / PR 模板
+│  └─ workflows/
+│     ├─ ci.yml
+│     └─ deploy.yml       # 构建工具并发布 GitHub Pages
 ├─ CONTRIBUTING.md        # 仓库级贡献说明
 ├─ LICENSE
 └─ README.md

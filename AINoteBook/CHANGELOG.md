@@ -2,6 +2,18 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- GitHub Pages 工具集合站：站点根 `/AITOOLS/` 为工具索引，AINoteBook 部署在 `/AITOOLS/AINoteBook/`。
+- 启动更新检测：线上版读取同源 `version.json`，发现新版本时弹窗提示；确认后刷新页面加载最新构建，选择「稍后」在本次会话内不再提示。
+- 新增 `npm run build:pages`，以 `/AITOOLS/AINoteBook/` 为 base 构建线上版本。
+
+### Tests
+
+- 新增 `scripts/check-update.mjs`，覆盖新版本弹窗、稍后、立即更新、同版本与请求失败。
+
 ## [0.12.0] - 2026-11-02
 
 ### Added

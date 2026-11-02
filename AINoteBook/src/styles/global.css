@@ -1100,6 +1100,18 @@ button {
   line-height: 1.65;
 }
 
+.dialog-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.dialog-link:hover {
+  text-decoration: underline;
+}
+
 /* ---------- 嵌入文档选择器 ---------- */
 
 .embed-picker {

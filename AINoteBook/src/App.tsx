@@ -1,5 +1,5 @@
 import { FileText, Plus } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EmbedPicker } from './components/Editor/EmbedPicker'
 import { FilePreview } from './components/Editor/FilePreview'
 import { NoteEditor } from './components/Editor/NoteEditor'
@@ -8,6 +8,17 @@ import { Sidebar } from './components/Sidebar/Sidebar'
 import { TocPanel } from './components/Toc/TocPanel'
 import { WorkspaceView } from './components/Workspace/WorkspaceView'
 import { ToastStack } from './components/common/ToastStack'
+import { UpdateDialog } from './components/common/UpdateDialog'
+import {
+  CHECK_TIMEOUT_MS,
+  CURRENT_VERSION,
+  clearVersionParam,
+  fetchLatestVersion,
+  isNewerVersion,
+  isVersionSkipped,
+  reloadToVersion,
+  skipVersion,
+} from './lib/appUpdate'
 import { sweepUnusedAssets } from './lib/imageAssets'
 import { useNavigationStore } from './store/useNavigationStore'
 import { useNoteStore } from './store/useNoteStore'
@@ -22,10 +33,41 @@ export default function App() {
   const tocOpen = useUiStore((state) => state.tocOpen)
   const refreshStorage = useUiStore((state) => state.refreshStorage)
   const startupRef = useRef(false)
+  const [update, setUpdate] = useState<{ current: string; latest: string } | null>(
+    null,
+  )
 
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    clearVersionParam()
+  }, [])
+
+  useEffect(() => {
+    if (!ready || !import.meta.env.PROD) return
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS)
+
+    void fetchLatestVersion(controller.signal)
+      .then((latest) => {
+        if (!latest || !isNewerVersion(latest, CURRENT_VERSION)) return
+        if (isVersionSkipped(latest)) return
+        setUpdate({ current: CURRENT_VERSION, latest })
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') return
+        console.warn('检查更新失败', error)
+      })
+      .finally(() => window.clearTimeout(timer))
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [ready])
 
   useEffect(() => {
     if (!ready || startupRef.current) return
@@ -71,6 +113,17 @@ export default function App() {
       </div>
       <EmbedPicker />
       <ToastStack />
+      {update && (
+        <UpdateDialog
+          currentVersion={update.current}
+          latestVersion={update.latest}
+          onLater={() => {
+            skipVersion(update.latest)
+            setUpdate(null)
+          }}
+          onUpdate={() => reloadToVersion(update.latest)}
+        />
+      )}
     </>
   )
 }
