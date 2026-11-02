@@ -90,6 +90,7 @@ assert.equal(await page.$$eval('.search-hit', (els) => els.length), 0)
 // 2. 目录
 await page.click('button[title="展开目录"]')
 await page.waitForSelector('.toc-panel')
+await page.waitForFunction(() => document.querySelectorAll('.toc-item').length >= 3)
 const tocItems = await page.$$eval('.toc-item', (els) => els.map((el) => el.textContent))
 assert.ok(tocItems.length >= 3, `目录项过少：${tocItems.join(', ')}`)
 

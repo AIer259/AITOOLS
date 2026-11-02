@@ -6,6 +6,8 @@ export type SlashIcon =
   | 'h1'
   | 'h2'
   | 'h3'
+  | 'h4'
+  | 'h5'
   | 'bullet'
   | 'ordered'
   | 'task'
@@ -66,6 +68,24 @@ export const SLASH_ITEMS: SlashItem[] = [
     pinyin: ['biaoti3', 'biaotisan', 'bt3'],
     keywords: ['h3', 'heading3', 'heading', '标题三', '小标题'],
     run: (editor, range) => start(editor, range).setHeading({ level: 3 }).run(),
+  },
+  {
+    id: 'heading4',
+    title: '标题4',
+    hint: '四级标题',
+    icon: 'h4',
+    pinyin: ['biaoti4', 'biaotisi', 'bt4'],
+    keywords: ['h4', 'heading4', 'heading', '标题四', '四级标题'],
+    run: (editor, range) => start(editor, range).setHeading({ level: 4 }).run(),
+  },
+  {
+    id: 'heading5',
+    title: '标题5',
+    hint: '五级标题',
+    icon: 'h5',
+    pinyin: ['biaoti5', 'biaotiwu', 'bt5'],
+    keywords: ['h5', 'heading5', 'heading', '标题五', '五级标题'],
+    run: (editor, range) => start(editor, range).setHeading({ level: 5 }).run(),
   },
   {
     id: 'bulletList',

@@ -22,3 +22,9 @@ export const AREA_LABEL: Record<Area, string> = {
   space: '空间',
   private: '私人',
 }
+
+export const DOC_TYPE_LABEL: Record<DocType, string> = {
+  md: 'Markdown',
+  docx: 'Word',
+  pdf: 'PDF',
+}

@@ -1,7 +1,9 @@
 import type { Editor } from '@tiptap/core'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
+import { highlightCodeElements } from './codeHighlight'
 import { EXPORT_CSS } from './exportStyles'
+import { escapeHtml } from './html'
 import { extensionForMime, getAssetMeta, loadAssetBlob } from './imageAssets'
 
 interface ExportImage {
@@ -16,27 +18,53 @@ interface HydratedExport {
 
 interface NormalizeExportOptions {
   keepColgroup?: boolean
+  flattenDetails?: boolean
+}
+
+function createDetailsBlock(
+  summaryHtml: string,
+  contentHtml: string,
+  flatten: boolean,
+): HTMLElement {
+  const block = document.createElement(flatten ? 'div' : 'details')
+  if (flatten) block.className = 'export-details'
+  else (block as HTMLDetailsElement).open = true
+
+  const summary = document.createElement(flatten ? 'div' : 'summary')
+  if (flatten) summary.className = 'export-details-summary'
+  summary.innerHTML = summaryHtml || '折叠内容'
+
+  const content = document.createElement('div')
+  if (flatten) content.className = 'export-details-content'
+  content.innerHTML = contentHtml
+
+  block.append(summary, content)
+  return block
+}
+
+function normalizeDetails(container: HTMLElement, flatten: boolean): void {
+  // 当前 schema 直接输出原生 details；从内到外处理，嵌套折叠块也能展开
+  Array.from(container.querySelectorAll('details'))
+    .reverse()
+    .forEach((detailsNode) => {
+      const summaryNode = detailsNode.querySelector(':scope > summary')
+      const summaryHtml = summaryNode?.innerHTML ?? ''
+      const contentHtml = Array.from(detailsNode.children)
+        .filter((child) => child !== summaryNode)
+        .map((child) => child.outerHTML)
+        .join('')
+      detailsNode.replaceWith(createDetailsBlock(summaryHtml, contentHtml, flatten))
+    })
 }
 
 function normalizeExportHtml(
   html: string,
-  { keepColgroup = false }: NormalizeExportOptions = {},
+  { keepColgroup = false, flattenDetails = false }: NormalizeExportOptions = {},
 ): string {
   const container = document.createElement('div')
   container.innerHTML = html
 
-  container.querySelectorAll('[data-type="details"]').forEach((detailsNode) => {
-    const summaryNode = detailsNode.querySelector('[data-type="detailsSummary"]')
-    const contentNode = detailsNode.querySelector('[data-type="detailsContent"]')
-    const details = document.createElement('details')
-    details.open = true
-    const summary = document.createElement('summary')
-    summary.innerHTML = summaryNode?.innerHTML ?? '折叠内容'
-    const content = document.createElement('div')
-    content.innerHTML = contentNode?.innerHTML ?? ''
-    details.append(summary, content)
-    detailsNode.replaceWith(details)
-  })
+  normalizeDetails(container, flattenDetails)
 
   container.querySelectorAll('button').forEach((button) => button.remove())
   if (!keepColgroup) {
@@ -89,6 +117,8 @@ function normalizeExportHtml(
     embed.replaceWith(card)
   })
 
+  highlightCodeElements(container)
+
   return container.innerHTML
 }
 
@@ -99,14 +129,6 @@ export function safeFileName(name: string): string {
     .trim()
     .slice(0, 80)
   return cleaned || '未命名文档'
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -295,11 +317,105 @@ function buildExportPage(title: string, bodyHtml: string): HTMLDivElement {
   return page
 }
 
+interface BreakBand {
+  top: number
+  bottom: number
+}
+
+const BREAK_ATOM_SELECTOR =
+  'img, pre, table tr, blockquote, [data-callout], .export-details, .export-embed'
+
+function mergeBands(bands: BreakBand[]): BreakBand[] {
+  const sorted = [...bands].sort((a, b) => a.top - b.top || a.bottom - b.bottom)
+  const merged: BreakBand[] = []
+
+  for (const band of sorted) {
+    const last = merged[merged.length - 1]
+    // 只合并真正重叠的区间；相邻文字行之间保留细缝作为切点
+    if (last && band.top < last.bottom - 1) {
+      last.bottom = Math.max(last.bottom, band.bottom)
+    } else {
+      merged.push({ ...band })
+    }
+  }
+
+  return merged
+}
+
+function collectBreakBands(page: HTMLElement, canvas: HTMLCanvasElement): BreakBand[] {
+  const pageRect = page.getBoundingClientRect()
+  if (pageRect.height <= 0) return []
+
+  const scaleY = canvas.height / pageRect.height
+  const bands: BreakBand[] = []
+
+  const addBand = (top: number, bottom: number) => {
+    const bandTop = Math.max(0, Math.floor((top - pageRect.top) * scaleY))
+    const bandBottom = Math.min(canvas.height, Math.ceil((bottom - pageRect.top) * scaleY))
+    if (bandBottom - bandTop >= 2) bands.push({ top: bandTop, bottom: bandBottom })
+  }
+
+  page.querySelectorAll(BREAK_ATOM_SELECTOR).forEach((element) => {
+    const rect = element.getBoundingClientRect()
+    if (rect.height <= 0 || rect.width <= 0) return
+    addBand(rect.top, rect.bottom)
+  })
+
+  const range = document.createRange()
+  const walker = document.createTreeWalker(page, NodeFilter.SHOW_TEXT)
+  while (walker.nextNode()) {
+    const node = walker.currentNode
+    if (!node.textContent?.trim()) continue
+
+    const parent = node.parentElement
+    // 原子块内部文字由块级区间覆盖，不再逐节点测量
+    if (!parent || parent.closest(BREAK_ATOM_SELECTOR)) continue
+
+    range.selectNodeContents(node)
+    for (const rect of Array.from(range.getClientRects())) {
+      if (rect.height <= 0 || rect.width <= 0) continue
+      addBand(rect.top, rect.bottom)
+    }
+  }
+
+  return mergeBands(bands)
+}
+
+function findBlockingBand(cut: number, bands: BreakBand[]): BreakBand | null {
+  let low = 0
+  let high = bands.length - 1
+
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const band = bands[mid]
+    if (cut <= band.top) high = mid - 1
+    else if (cut >= band.bottom) low = mid + 1
+    else return cut > band.top + 1 && cut < band.bottom - 1 ? band : null
+  }
+
+  return null
+}
+
+function findSafeCut(target: number, minCut: number, bands: BreakBand[]): number {
+  let cut = target
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const blocking = findBlockingBand(cut, bands)
+    if (!blocking) return cut
+    const next = blocking.top - 2
+    if (next <= minCut) return target
+    cut = next
+  }
+  return target
+}
+
 export async function exportPdfDirect(editor: Editor, title: string): Promise<void> {
   ensureExportStyle()
 
   const { html } = await hydrateImagesForExport(editor.getHTML(), title, 'data-url')
-  const page = buildExportPage(title, normalizeExportHtml(html, { keepColgroup: true }))
+  const page = buildExportPage(
+    title,
+    normalizeExportHtml(html, { keepColgroup: true, flattenDetails: true }),
+  )
   page.style.position = 'fixed'
   page.style.left = '20px'
   page.style.top = '0'
@@ -340,12 +456,15 @@ export async function exportPdfDirect(editor: Editor, title: string): Promise<vo
     const contentHeight = pdfHeight - marginY * 2
     const pxPerMm = canvas.width / contentWidth
     const sliceHeight = Math.max(1, Math.floor(contentHeight * pxPerMm))
+    const bands = canvas.height > sliceHeight ? collectBreakBands(page, canvas) : []
 
     let offsetY = 0
     let firstPage = true
 
     while (offsetY < canvas.height) {
-      const currentHeight = Math.min(sliceHeight, canvas.height - offsetY)
+      const target = Math.min(canvas.height, offsetY + sliceHeight)
+      const cut = target >= canvas.height ? canvas.height : findSafeCut(target, offsetY + 120, bands)
+      const currentHeight = Math.max(1, cut - offsetY)
       const slice = document.createElement('canvas')
       slice.width = canvas.width
       slice.height = currentHeight
@@ -376,7 +495,7 @@ export async function exportPdfDirect(editor: Editor, title: string): Promise<vo
         currentHeight / pxPerMm,
       )
 
-      offsetY += sliceHeight
+      offsetY = cut
       firstPage = false
     }
 
@@ -419,7 +538,7 @@ export async function exportPdfPrint(editor: Editor, title: string): Promise<voi
   )
   const html = buildPrintDocument(
     title,
-    normalizeExportHtml(hydratedHtml, { keepColgroup: true }),
+    normalizeExportHtml(hydratedHtml, { keepColgroup: true, flattenDetails: true }),
   )
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')

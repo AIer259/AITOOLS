@@ -7,6 +7,8 @@ import { collectImageFiles, saveImageAsset } from '../../lib/imageAssets'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 import type { TreeNode } from '../../types'
+import { LinkTools } from './LinkTools'
+import { SelectionToolbar } from './SelectionToolbar'
 
 interface NoteEditorProps {
   node: TreeNode
@@ -67,8 +69,11 @@ export function NoteEditor({ node }: NoteEditorProps) {
     const target = event.target as HTMLElement
     if (target.closest('.ProseMirror')) return
 
-    // 点击滚动条轨道/滑块时不追加段落，交给浏览器原生滚动处理
+    // Portal 菜单的点击经 React 冒泡到这里，但目标不在正文滚动区内，不应当作点击空白
     const container = event.currentTarget
+    if (!container.contains(target)) return
+
+    // 点击滚动条轨道/滑块时不追加段落，交给浏览器原生滚动处理
     const rect = container.getBoundingClientRect()
     const scrollbarWidth = container.offsetWidth - container.clientWidth
     if (scrollbarWidth > 0 && event.clientX >= rect.right - scrollbarWidth) return
@@ -172,6 +177,9 @@ export function NoteEditor({ node }: NoteEditorProps) {
             <div className="note-add-space" aria-hidden="true" />
           </div>
         </div>
+
+        <SelectionToolbar editor={editor} />
+        <LinkTools editor={editor} />
       </article>
     </div>
   )

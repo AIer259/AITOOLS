@@ -1,15 +1,31 @@
 import { File, FileText, FileType2, Search, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertDocumentEmbed, uploadDocumentFile } from '../../lib/documentFiles'
+import { importDocument } from '../../lib/fileImport'
 import { getPath } from '../../lib/tree'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
-import { AREA_LABEL, type DocType, type TreeNode } from '../../types'
+import { AREA_LABEL, DOC_TYPE_LABEL, type DocType, type TreeNode } from '../../types'
 
-const TYPE_LABEL: Record<DocType, string> = {
-  md: 'Markdown',
-  docx: 'Word',
-  pdf: 'PDF',
+const UPLOAD_TYPES = [
+  { kind: 'md', label: 'Markdown', extensions: ['.md', '.markdown'], mime: 'text/markdown' },
+  { kind: 'pdf', label: 'PDF', extensions: ['.pdf'], mime: 'application/pdf' },
+  {
+    kind: 'docx',
+    label: 'Word',
+    extensions: ['.docx'],
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  },
+] as const
+
+const UPLOAD_ACCEPT = UPLOAD_TYPES.flatMap((item) => [...item.extensions, item.mime]).join(',')
+const UPLOAD_ERROR = `仅支持 ${UPLOAD_TYPES.map((item) => item.label).join('、')} 文件`
+
+function detectUploadType(name: string): DocType | null {
+  const lower = name.toLowerCase()
+  return (
+    UPLOAD_TYPES.find((item) => item.extensions.some((ext) => lower.endsWith(ext)))?.kind ?? null
+  )
 }
 
 function DocIcon({ type }: { type: DocType }) {
@@ -72,27 +88,29 @@ export function EmbedPicker() {
 
   const handleUpload = async (file: File) => {
     if (!editor || insertPos === null) return
-    const lower = file.name.toLowerCase()
-    const kind: 'pdf' | 'docx' | null = lower.endsWith('.pdf')
-      ? 'pdf'
-      : lower.endsWith('.docx')
-        ? 'docx'
-        : null
+    const kind = detectUploadType(file.name)
 
     if (!kind) {
-      showToast('仅支持 PDF 与 .docx 文件', 'error')
+      showToast(UPLOAD_ERROR, 'error')
       return
     }
 
     setBusy(true)
     try {
-      const doc = await uploadDocumentFile(file, kind)
+      const doc =
+        kind === 'md'
+          ? await importDocument(file, 'md', { activate: false })
+          : await uploadDocumentFile(file, kind)
       insertDocumentEmbed(editor, insertPos, doc)
       showToast(`已嵌入「${doc.name}」`, 'success')
       closePicker()
     } catch (error) {
       console.error(error)
-      showToast('文件上传失败，请重试', 'error')
+      const message =
+        error instanceof Error && error.message === '文件内容为空'
+          ? 'Markdown 文件内容为空'
+          : '文件上传失败，请重试'
+      showToast(message, 'error')
     } finally {
       setBusy(false)
     }
@@ -115,7 +133,7 @@ export function EmbedPicker() {
         <div className="embed-picker-head">
           <div>
             <h3>嵌入文档</h3>
-            <p>选择已有文档，或上传 PDF / Word 文件</p>
+            <p>选择已有文档，或上传 Markdown / PDF / Word 文件</p>
           </div>
           <button type="button" className="icon-button" title="关闭" onClick={closePicker}>
             <X size={15} />
@@ -152,7 +170,7 @@ export function EmbedPicker() {
                     <span className="embed-item-name">{doc.name}</span>
                     <span className="embed-item-path">{pathLabel(doc)}</span>
                   </span>
-                  <span className="embed-item-type">{TYPE_LABEL[type]}</span>
+                  <span className="embed-item-type">{DOC_TYPE_LABEL[type]}</span>
                 </button>
               )
             })
@@ -172,7 +190,7 @@ export function EmbedPicker() {
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload size={14} />
-              {busy ? '上传中…' : '上传 PDF / Word'}
+              {busy ? '上传中…' : '上传文件'}
             </button>
           </div>
         </div>
@@ -180,7 +198,7 @@ export function EmbedPicker() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept={UPLOAD_ACCEPT}
           hidden
           onChange={(event) => {
             const file = event.target.files?.[0]

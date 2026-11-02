@@ -5,13 +5,7 @@ import { loadBlob } from '../../lib/db'
 import { hydrateImageElements } from '../../lib/imageAssets'
 import { docJsonToHtml } from '../../lib/renderDoc'
 import { useNoteStore } from '../../store/useNoteStore'
-import type { DocType } from '../../types'
-
-const TYPE_LABEL: Record<DocType, string> = {
-  md: 'Markdown',
-  docx: 'Word',
-  pdf: 'PDF',
-}
+import { DOC_TYPE_LABEL, type DocType } from '../../types'
 
 function TypeIcon({ type }: { type: DocType }) {
   if (type === 'pdf') return <File size={15} />
@@ -159,7 +153,7 @@ export function EmbedNodeView(props: NodeViewProps) {
             <TypeIcon type={docType} />
           </span>
           <span className="embed-name">{name}</span>
-          <span className="embed-badge">{TYPE_LABEL[docType]}</span>
+          <span className="embed-badge">{DOC_TYPE_LABEL[docType]}</span>
         </button>
         <button
           type="button"

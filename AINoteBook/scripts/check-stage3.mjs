@@ -103,6 +103,33 @@ await page.waitForSelector('.slash-menu')
 await page.keyboard.press('Escape')
 await page.waitForFunction(() => !document.querySelector('.slash-menu'))
 
+// 标题扩展到 H4 / H5（先换到干净段落，Esc 后原段落残留 /）
+await page.click('.note-prose')
+await page.keyboard.press('End')
+await page.keyboard.press('Enter')
+await page.keyboard.type('/h4')
+await page.waitForFunction(
+  () => document.querySelector('.slash-item .slash-title')?.textContent === '标题4',
+)
+await page.keyboard.press('Enter')
+await page.waitForSelector('.note-prose h4')
+await page.keyboard.sendCharacter('四级标题')
+await page.keyboard.press('Enter')
+await page.keyboard.type('/bt5')
+await page.waitForFunction(
+  () => document.querySelector('.slash-item .slash-title')?.textContent === '标题5',
+)
+await page.keyboard.press('Enter')
+await page.waitForSelector('.note-prose h5')
+await page.keyboard.sendCharacter('五级标题')
+
+const headings = await page.evaluate(() => ({
+  h4: document.querySelector('.note-prose h4')?.textContent ?? '',
+  h5: document.querySelector('.note-prose h5')?.textContent ?? '',
+}))
+assert.ok(headings.h4.includes('四级标题'), 'H4 标题未生成')
+assert.ok(headings.h5.includes('五级标题'), 'H5 标题未生成')
+
 await page.screenshot({ path: path.join(shotDir, 'stage3-done.png') })
 await browser.close()
 
@@ -111,6 +138,7 @@ const results = {
   firstByDai,
   selectedAfterDown,
   firstByChinese,
+  headings,
   consoleErrors: errors,
 }
 console.log(JSON.stringify(results, null, 2))

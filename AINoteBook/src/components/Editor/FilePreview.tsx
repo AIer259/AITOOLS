@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadBlob } from '../../lib/db'
 import { useNoteStore } from '../../store/useNoteStore'
-import type { TreeNode } from '../../types'
+import { DOC_TYPE_LABEL, type TreeNode } from '../../types'
 
 interface FilePreviewProps {
   node: TreeNode
@@ -71,12 +71,14 @@ export function FilePreview({ node }: FilePreviewProps) {
           aria-label="文件名"
           onChange={(event) => renameNode(node.id, event.target.value)}
           onBlur={() => {
-            if (!node.name.trim()) renameNode(node.id, node.docType === 'pdf' ? 'PDF 文档' : 'Word 文档')
+            if (!node.name.trim()) {
+              renameNode(node.id, `${DOC_TYPE_LABEL[node.docType ?? 'docx']} 文档`)
+            }
           }}
         />
 
         <div className="paper-meta">
-          <span>{node.docType === 'pdf' ? 'PDF 文档' : 'Word 文档'}</span>
+          <span>{`${DOC_TYPE_LABEL[node.docType ?? 'docx']} 文档`}</span>
           <span className="meta-dot">·</span>
           <span>只读预览</span>
         </div>

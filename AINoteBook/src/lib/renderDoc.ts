@@ -2,9 +2,12 @@ import { generateHTML, mergeAttributes, Node, type Extensions, type JSONContent 
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
+import { BackgroundColor, Color, TextStyle } from '@tiptap/extension-text-style'
 import StarterKit from '@tiptap/starter-kit'
 import { Callout } from '../extensions/Callout'
+import { CodeBlock } from '../extensions/CodeBlock'
 import { EnhancedTable } from '../extensions/EnhancedTable'
+import { highlightCodeInHtml } from './codeHighlight'
 
 const EmbedPlaceholder = Node.create({
   name: 'documentEmbed',
@@ -78,7 +81,12 @@ function createRenderExtensions(): Extensions {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
+      codeBlock: false,
     }),
+    TextStyle,
+    Color,
+    BackgroundColor,
+    CodeBlock,
     Details.configure({
       persist: true,
       HTMLAttributes: { class: 'note-details' },
@@ -100,7 +108,7 @@ function createRenderExtensions(): Extensions {
 export function docJsonToHtml(content?: JSONContent): string {
   if (!content) return ''
   try {
-    return generateHTML(content, createRenderExtensions())
+    return highlightCodeInHtml(generateHTML(content, createRenderExtensions()))
   } catch {
     return ''
   }

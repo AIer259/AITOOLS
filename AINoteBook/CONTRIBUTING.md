@@ -41,10 +41,10 @@ npm run check
 npm install --no-save puppeteer-core
 npm run dev -- --port 5173
 node scripts/check-stage1.mjs
-# 依次运行 check-stage2 ~ check-stage5、check-note-layout、check-image、check-callout、check-table
+# 依次运行 check-stage2 ~ check-stage5、check-note-layout、check-image、check-callout、check-table、check-codeblock、check-link、check-toolbar、check-toc
 ```
 
-脚本内的 Chrome 路径与测试端口目前按 Windows 本地环境配置；在其他系统运行时请修改脚本顶部的 `CHROME` 与 `URL` 常量。自测会产生 `.tmp-*` 临时目录，可直接删除。
+脚本内的 Chrome 路径与测试端口目前按 Windows 本地环境配置；在其他系统运行时请修改脚本顶部的 `CHROME` 与 `URL` 常量。`check-codeblock.mjs`、`check-link.mjs`、`check-toolbar.mjs` 与 `check-toc.mjs` 支持 `APP_URL` 与 `CHROME_PATH` 环境变量覆盖测试地址与浏览器路径。自测会产生 `.tmp-*` 临时目录，可直接删除。
 
 ## 提交与 PR
 

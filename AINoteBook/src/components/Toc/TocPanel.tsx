@@ -1,6 +1,6 @@
-import { X } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { extractToc, type TocItem } from '../../lib/toc'
+import { ChevronRight, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { buildTocTree, extractToc, flattenToc, type TocItem } from '../../lib/toc'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 
@@ -11,6 +11,10 @@ export function TocPanel() {
 
   const [items, setItems] = useState<TocItem[]>([])
   const [activePos, setActivePos] = useState<number | null>(null)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  const tree = useMemo(() => buildTocTree(items), [items])
+  const rows = useMemo(() => flattenToc(tree, collapsed), [tree, collapsed])
 
   useEffect(() => {
     if (!editor) {
@@ -26,10 +30,24 @@ export function TocPanel() {
     }
   }, [editor, activeId])
 
+  useEffect(() => {
+    setCollapsed(new Set())
+    setActivePos(null)
+  }, [activeId])
+
   const jumpTo = (item: TocItem) => {
     if (!editor) return
     editor.chain().focus().setTextSelection(item.pos + 1).scrollIntoView().run()
     setActivePos(item.pos)
+  }
+
+  const toggleCollapsed = (id: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   return (
@@ -42,21 +60,45 @@ export function TocPanel() {
       </div>
 
       <div className="toc-list">
-        {items.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="toc-empty">当前文档还没有标题</div>
         ) : (
-          items.map((item) => (
-            <button
-              key={item.pos}
-              type="button"
-              className={`toc-item level-${item.level}${activePos === item.pos ? ' active' : ''}`}
-              style={{ paddingLeft: 12 + (item.level - 1) * 12 }}
-              title={item.text}
-              onClick={() => jumpTo(item)}
-            >
-              {item.text}
-            </button>
-          ))
+          rows.map((node) => {
+            const hasChildren = node.children.length > 0
+            const isCollapsed = collapsed.has(node.id)
+
+            return (
+              <div
+                key={node.id}
+                className="toc-row"
+                style={{ paddingLeft: 4 + (node.level - 1) * 12 }}
+              >
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    className={`toc-toggle${isCollapsed ? ' is-collapsed' : ''}`}
+                    title={isCollapsed ? '展开下级目录' : '折叠下级目录'}
+                    aria-label={isCollapsed ? '展开下级目录' : '折叠下级目录'}
+                    aria-expanded={!isCollapsed}
+                    onClick={() => toggleCollapsed(node.id)}
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                ) : (
+                  <span className="toc-toggle-spacer" aria-hidden="true" />
+                )}
+
+                <button
+                  type="button"
+                  className={`toc-item level-${node.level}${activePos === node.pos ? ' active' : ''}`}
+                  title={node.text}
+                  onClick={() => jumpTo(node)}
+                >
+                  {node.text}
+                </button>
+              </div>
+            )
+          })
         )}
       </div>
     </aside>

@@ -22,6 +22,7 @@
   --accent-soft: rgba(79, 110, 247, 0.12);
   --danger: #d93a3f;
   --code-bg: #f5f5f2;
+  --code-head-bg: #efefe9;
   --table-head: #f7f7f4;
   --callout-bg: #faf9f4;
   --callout-border: #e6e2d5;
@@ -46,6 +47,7 @@
   --accent-soft: rgba(125, 155, 255, 0.14);
   --danger: #ff6b6b;
   --code-bg: #202020;
+  --code-head-bg: #262626;
   --table-head: #303030;
   --callout-bg: #313131;
   --callout-border: #454540;
@@ -1125,10 +1127,57 @@ button {
   padding: 10px 8px 24px;
 }
 
+.toc-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 5px;
+}
+
+.toc-row:hover {
+  background: var(--hover);
+}
+
+.toc-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toc-toggle:hover {
+  background: var(--active);
+  color: var(--text);
+}
+
+.toc-toggle svg {
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+}
+
+.toc-toggle.is-collapsed svg {
+  transform: rotate(0deg);
+}
+
+.toc-toggle-spacer {
+  flex: none;
+  width: 20px;
+  height: 22px;
+}
+
 .toc-item {
   display: block;
-  width: 100%;
-  padding: 5px 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  padding: 5px 8px 5px 2px;
   border: 0;
   border-radius: 5px;
   background: transparent;
@@ -1143,7 +1192,7 @@ button {
 }
 
 .toc-item:hover {
-  background: var(--hover);
+  background: transparent;
   color: var(--text);
 }
 

@@ -8,7 +8,7 @@
 
 ### [AINoteBook](AINoteBook/README.md)
 
-本地优先的精简 Markdown 笔记应用，支持复杂表格、着重块、图片、嵌套文档与 PDF 导出。
+本地优先的精简 Markdown 笔记应用，支持复杂表格、着重块、代码块语言与语法高亮、图片、嵌套文档与 PDF 导出。
 
 - 技术栈：React · TypeScript · Vite · Tiptap · Zustand · IndexedDB
 - 启动：

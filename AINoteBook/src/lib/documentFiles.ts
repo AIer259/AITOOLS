@@ -1,7 +1,9 @@
 import type { Editor } from '@tiptap/core'
 import { useNoteStore } from '../store/useNoteStore'
-import type { TreeNode } from '../types'
+import { DOC_TYPE_LABEL, type DocType, type TreeNode } from '../types'
 import { saveBlob } from './db'
+
+type DocumentUploadType = Exclude<DocType, 'md'>
 
 function makeBlobId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -10,13 +12,14 @@ function makeBlobId(): string {
   return `blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export async function uploadDocumentFile(file: File, docType: 'pdf' | 'docx'): Promise<TreeNode> {
-  const buffer = await file.arrayBuffer()
+export async function uploadDocumentFile(
+  file: File,
+  docType: DocumentUploadType,
+): Promise<TreeNode> {
   const blobId = makeBlobId()
-  await saveBlob(blobId, buffer)
+  await saveBlob(blobId, await file.arrayBuffer())
 
-  const name =
-    file.name.replace(/\.[^.]+$/, '').trim() || (docType === 'pdf' ? 'PDF 文档' : 'Word 文档')
+  const name = file.name.replace(/\.[^.]+$/, '').trim() || `${DOC_TYPE_LABEL[docType]} 文档`
 
   const { activeId, nodes, createNode } = useNoteStore.getState()
   const active = nodes.find((node) => node.id === activeId)

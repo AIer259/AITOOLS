@@ -91,6 +91,32 @@ assert.ok(result.quote, '引用未生成')
 assert.ok(result.task, '待办列表未生成')
 assert.ok(result.code, '代码块未生成')
 
+// 自动链接：settings.py 这类文件名保持纯文本，明确写出的网址仍自动识别
+await page.click('.note-add-space')
+await page.keyboard.type('settings.py')
+await page.keyboard.press('Enter')
+await page.keyboard.type('https://example.com ')
+await page.waitForFunction(() =>
+  [...document.querySelectorAll('.note-prose a')].some(
+    (link) => link.textContent === 'https://example.com',
+  ),
+)
+const autoLink = await page.evaluate(() => ({
+  filenamePlain: [...document.querySelectorAll('.note-prose p')].some(
+    (paragraph) => paragraph.textContent?.trim() === 'settings.py' && !paragraph.querySelector('a'),
+  ),
+  urlLinked: [...document.querySelectorAll('.note-prose a')].some(
+    (link) => link.textContent === 'https://example.com',
+  ),
+  links: [...document.querySelectorAll('.note-prose a')].map((link) => ({
+    text: link.textContent,
+    href: link.getAttribute('href'),
+  })),
+}))
+assert.ok(autoLink.filenamePlain, 'settings.py 被错误识别为超链接')
+assert.ok(autoLink.urlLinked, '明确写出的网址没有自动识别')
+result.autoLink = autoLink
+
 await page.screenshot({ path: path.join(shotDir, 'stage2-markdown.png'), fullPage: false })
 await browser.close()
 
