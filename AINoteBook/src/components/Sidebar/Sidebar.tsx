@@ -1,6 +1,13 @@
 import { Database, FileText, Folder, Moon, NotebookPen, Plus, Sun } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type DragEvent as ReactDragEvent } from 'react'
+import { showMoveResult } from '../../lib/moveFeedback'
 import { formatBytes } from '../../lib/storageInfo'
+import {
+  canDropOnArea,
+  getDraggedNodeId,
+  setDraggedNodeId,
+} from '../../lib/treeDrag'
+import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 import type { Area, NodeKind } from '../../types'
@@ -23,11 +30,14 @@ export function Sidebar() {
   const theme = useNoteStore((state) => state.theme)
   const toggleTheme = useNoteStore((state) => state.toggleTheme)
   const createNode = useNoteStore((state) => state.createNode)
+  const browse = useNavigationStore((state) => state.browse)
+  const openArea = useNavigationStore((state) => state.openArea)
   const storageInfo = useUiStore((state) => state.storageInfo)
   const refreshStorage = useUiStore((state) => state.refreshStorage)
 
   const [menuArea, setMenuArea] = useState<Area | null>(null)
   const [createFor, setCreateFor] = useState<CreateFor | null>(null)
+  const [dropArea, setDropArea] = useState<Area | null>(null)
 
   useEffect(() => {
     void refreshStorage()
@@ -37,6 +47,37 @@ export function Sidebar() {
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
   }, [refreshStorage])
+
+  const handleAreaDragOver = (event: ReactDragEvent<HTMLDivElement>, area: Area) => {
+    if (!event.dataTransfer.types.includes('application/x-ainb-node')) return
+
+    const dragId = getDraggedNodeId()
+    if (!dragId || !canDropOnArea(nodes, dragId)) return
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDropArea(area)
+  }
+
+  const handleAreaDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    const related = event.relatedTarget as Node | null
+    if (related && event.currentTarget.contains(related)) return
+    setDropArea(null)
+  }
+
+  const handleAreaDrop = (event: ReactDragEvent<HTMLDivElement>, area: Area) => {
+    if (!event.dataTransfer.types.includes('application/x-ainb-node')) return
+    event.preventDefault()
+    setDropArea(null)
+
+    const dragId = getDraggedNodeId()
+    setDraggedNodeId(null)
+    if (!dragId) return
+
+    showMoveResult(
+      useNoteStore.getState().moveNodeTo(dragId, { area, parentId: null }),
+    )
+  }
 
   const storageUsage = storageInfo
     ? storageInfo.supported
@@ -68,8 +109,21 @@ export function Sidebar() {
           const roots = nodes.filter((node) => node.area === section.area && node.parentId === null)
           return (
             <section className="tree-section" key={section.area}>
-              <div className="section-head">
-                <span>{section.label}</span>
+              <div
+                className={`section-head${dropArea === section.area ? ' is-drop-target' : ''}`}
+                onDragOver={(event) => handleAreaDragOver(event, section.area)}
+                onDragLeave={handleAreaDragLeave}
+                onDrop={(event) => handleAreaDrop(event, section.area)}
+              >
+                <button
+                  type="button"
+                  className={`section-title${
+                    browse?.area === section.area && browse.folderId === null ? ' active' : ''
+                  }`}
+                  onClick={() => openArea(section.area)}
+                >
+                  {section.label}
+                </button>
                 <button
                   type="button"
                   className="section-add"

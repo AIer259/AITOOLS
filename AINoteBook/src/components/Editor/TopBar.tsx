@@ -19,6 +19,7 @@ import {
 } from '../../lib/fileExport'
 import { importDocument, type ImportKind } from '../../lib/fileImport'
 import { getPath } from '../../lib/tree'
+import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 import { AREA_LABEL } from '../../types'
@@ -31,6 +32,9 @@ export function TopBar() {
   const nodes = useNoteStore((state) => state.nodes)
   const activeId = useNoteStore((state) => state.activeId)
   const saveState = useNoteStore((state) => state.saveState)
+  const browse = useNavigationStore((state) => state.browse)
+  const openArea = useNavigationStore((state) => state.openArea)
+  const openFolder = useNavigationStore((state) => state.openFolder)
 
   const editor = useUiStore((state) => state.editor)
   const tocOpen = useUiStore((state) => state.tocOpen)
@@ -45,19 +49,33 @@ export function TopBar() {
 
   const mdInputRef = useRef<HTMLInputElement>(null)
   const docxInputRef = useRef<HTMLInputElement>(null)
+  const zipInputRef = useRef<HTMLInputElement>(null)
 
   const active = nodes.find((node) => node.id === activeId)
-  const path = useMemo(() => getPath(nodes, activeId), [nodes, activeId])
+  const path = useMemo(() => {
+    if (browse) return browse.folderId ? getPath(nodes, browse.folderId) : []
+    return getPath(nodes, activeId)
+  }, [nodes, activeId, browse])
+  const area = browse?.area ?? path[0]?.area ?? active?.area ?? null
   const canEdit = Boolean(active && active.kind === 'doc' && (active.docType ?? 'md') === 'md' && editor)
 
   const handleImport = async (file: File, kind: ImportKind) => {
     setBusy(true)
     try {
-      const result = await importDocument(file, kind)
+      const target = browse
+        ? { area: browse.area, parentId: browse.folderId }
+        : active
+          ? { area: active.area, parentId: active.parentId }
+          : undefined
+      const result = await importDocument(file, kind, { target })
       showToast(`已导入「${result.name}」`, 'success')
     } catch (error) {
       console.error(error)
-      showToast('导入失败：请确认文件格式与内容', 'error')
+      const message =
+        error instanceof Error && error.message === '压缩包中找不到 Markdown 文件'
+          ? error.message
+          : '导入失败：请确认文件格式与内容'
+      showToast(message, 'error')
     } finally {
       setBusy(false)
     }
@@ -105,17 +123,41 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="breadcrumb">
-        {path.length > 0 ? (
+        {area ? (
           <>
-            <span className="crumb">{AREA_LABEL[path[0].area]}</span>
-            {path.map((node) => (
-              <Fragment key={node.id}>
-                <ChevronRight size={13} className="crumb-sep" />
-                <span className={`crumb${node.id === activeId ? ' current' : ''}`} title={node.name}>
-                  {node.name || '未命名'}
-                </span>
-              </Fragment>
-            ))}
+            <button
+              type="button"
+              className={`crumb crumb-button${
+                browse && browse.folderId === null ? ' current' : ''
+              }`}
+              onClick={() => openArea(area)}
+            >
+              {AREA_LABEL[area]}
+            </button>
+            {path.map((node) => {
+              const current = browse ? node.id === browse.folderId : node.id === activeId
+              const clickable = node.kind === 'folder'
+
+              return (
+                <Fragment key={node.id}>
+                  <ChevronRight size={13} className="crumb-sep" />
+                  {clickable ? (
+                    <button
+                      type="button"
+                      className={`crumb crumb-button${current ? ' current' : ''}`}
+                      title={node.name}
+                      onClick={() => openFolder(node.area, node.id)}
+                    >
+                      {node.name || '未命名'}
+                    </button>
+                  ) : (
+                    <span className={`crumb${current ? ' current' : ''}`} title={node.name}>
+                      {node.name || '未命名'}
+                    </span>
+                  )}
+                </Fragment>
+              )
+            })}
           </>
         ) : (
           <span className="crumb current">AINoteBook</span>
@@ -173,6 +215,11 @@ export function TopBar() {
                   label: '导入 Word 文档',
                   icon: <FileType2 size={14} />,
                   onSelect: () => docxInputRef.current?.click(),
+                },
+                {
+                  label: '导入 Markdown + 图片（ZIP）',
+                  icon: <FileArchive size={14} />,
+                  onSelect: () => zipInputRef.current?.click(),
                 },
               ]}
             />
@@ -239,6 +286,17 @@ export function TopBar() {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (file) void handleImport(file, 'docx')
+          }}
+        />
+        <input
+          ref={zipInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) void handleImport(file, 'zip')
           }}
         />
       </div>

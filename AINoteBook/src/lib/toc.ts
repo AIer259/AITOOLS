@@ -53,10 +53,24 @@ export function buildTocTree(items: TocItem[]): TocNode[] {
   return roots
 }
 
+// 默认只显示一、二级；二级节点折叠后即隐藏三级及之后
+export const DEFAULT_COLLAPSED_LEVEL = 2
+
+/** 默认三级及之后折叠；手动切换结果优先 */
+export function isTocCollapsed(
+  node: TocNode,
+  overrides: ReadonlyMap<string, boolean>,
+): boolean {
+  return overrides.get(node.id) ?? node.level >= DEFAULT_COLLAPSED_LEVEL
+}
+
 /** 展开为可见行；折叠节点的整棵子树都会被跳过 */
-export function flattenToc(nodes: TocNode[], collapsed: ReadonlySet<string>): TocNode[] {
+export function flattenToc(
+  nodes: TocNode[],
+  overrides: ReadonlyMap<string, boolean>,
+): TocNode[] {
   return nodes.flatMap((node) => [
     node,
-    ...(collapsed.has(node.id) ? [] : flattenToc(node.children, collapsed)),
+    ...(isTocCollapsed(node, overrides) ? [] : flattenToc(node.children, overrides)),
   ])
 }

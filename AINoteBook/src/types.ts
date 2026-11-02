@@ -18,13 +18,31 @@ export interface TreeNode {
   updatedAt: number
 }
 
+export interface NodeLocation {
+  area: Area
+  parentId: string | null
+}
+
 export const AREA_LABEL: Record<Area, string> = {
   space: '空间',
   private: '私人',
 }
 
+export const DOC_TYPE_META: Record<
+  DocType,
+  { label: string; extension: string; mime: string }
+> = {
+  md: { label: 'Markdown', extension: 'md', mime: 'text/markdown' },
+  docx: {
+    label: 'Word',
+    extension: 'docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  },
+  pdf: { label: 'PDF', extension: 'pdf', mime: 'application/pdf' },
+}
+
 export const DOC_TYPE_LABEL: Record<DocType, string> = {
-  md: 'Markdown',
-  docx: 'Word',
-  pdf: 'PDF',
+  md: DOC_TYPE_META.md.label,
+  docx: DOC_TYPE_META.docx.label,
+  pdf: DOC_TYPE_META.pdf.label,
 }

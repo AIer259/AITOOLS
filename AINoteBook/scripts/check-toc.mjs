@@ -114,10 +114,10 @@ await page.waitForSelector('.note-prose h3')
 await page.waitForFunction(() => !document.querySelector('button[title="展开目录"]')?.disabled)
 await page.click('button[title="展开目录"]')
 await page.waitForSelector('.toc-panel')
-await page.waitForFunction(() => document.querySelectorAll('.toc-item').length === 6)
+await page.waitForFunction(() => document.querySelectorAll('.toc-item').length === 5)
 
 const allItems = await tocTexts()
-assert.deepEqual(allItems, ['一级A', '二级A1', '三级A1a', '二级A2', '一级B', '二级B1'])
+assert.deepEqual(allItems, ['一级A', '二级A1', '二级A2', '一级B', '二级B1'])
 
 const toggleCount = await page.$$eval('.toc-toggle', (buttons) => buttons.length)
 assert.equal(toggleCount, 3, '有下级的标题应显示三个折叠按钮')
@@ -147,7 +147,7 @@ const collapsedA = await page.$$eval('.toc-row', (rows) => {
 assert.equal(collapsedA.expanded, 'false')
 assert.equal(collapsedA.collapsedClass, true)
 
-// 展开一级A
+// 展开一级A；二级A1 默认折叠，三级标题仍隐藏
 await clickTocToggle('一级A')
 await page.waitForFunction(
   (expected) => {
@@ -157,10 +157,12 @@ await page.waitForFunction(
     return JSON.stringify(texts) === JSON.stringify(expected)
   },
   {},
-  ['一级A', '二级A1', '三级A1a', '二级A2', '一级B', '二级B1'],
+  ['一级A', '二级A1', '二级A2', '一级B', '二级B1'],
 )
 
-// 折叠二级A1：只隐藏三级标题
+// 展开二级A1 显示三级标题，再折叠隐藏
+await clickTocToggle('二级A1')
+await page.waitForFunction(() => document.querySelectorAll('.toc-item').length === 6)
 await clickTocToggle('二级A1')
 await page.waitForFunction(
   (expected) => {

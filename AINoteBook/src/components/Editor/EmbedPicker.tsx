@@ -1,11 +1,13 @@
-import { File, FileText, FileType2, Search, Upload, X } from 'lucide-react'
+import { Search, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ensureAttachmentFolder } from '../../lib/attachments'
 import { insertDocumentEmbed, uploadDocumentFile } from '../../lib/documentFiles'
 import { importDocument } from '../../lib/fileImport'
 import { getPath } from '../../lib/tree'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 import { AREA_LABEL, DOC_TYPE_LABEL, type DocType, type TreeNode } from '../../types'
+import { DocTypeIcon } from '../common/DocTypeIcon'
 
 const UPLOAD_TYPES = [
   { kind: 'md', label: 'Markdown', extensions: ['.md', '.markdown'], mime: 'text/markdown' },
@@ -26,12 +28,6 @@ function detectUploadType(name: string): DocType | null {
   return (
     UPLOAD_TYPES.find((item) => item.extensions.some((ext) => lower.endsWith(ext)))?.kind ?? null
   )
-}
-
-function DocIcon({ type }: { type: DocType }) {
-  if (type === 'pdf') return <File size={16} />
-  if (type === 'docx') return <FileType2 size={16} />
-  return <FileText size={16} />
 }
 
 export function EmbedPicker() {
@@ -97,10 +93,13 @@ export function EmbedPicker() {
 
     setBusy(true)
     try {
+      const active = nodes.find((node) => node.id === activeId)
+      const folder = active ? ensureAttachmentFolder(active) : null
+      const target = folder ? { area: folder.area, parentId: folder.id } : undefined
       const doc =
         kind === 'md'
-          ? await importDocument(file, 'md', { activate: false })
-          : await uploadDocumentFile(file, kind)
+          ? await importDocument(file, 'md', { activate: false, target })
+          : await uploadDocumentFile(file, kind, target)
       insertDocumentEmbed(editor, insertPos, doc)
       showToast(`已嵌入「${doc.name}」`, 'success')
       closePicker()
@@ -164,7 +163,7 @@ export function EmbedPicker() {
                   onClick={() => insert(doc)}
                 >
                   <span className="embed-item-icon">
-                    <DocIcon type={type} />
+                    <DocTypeIcon docType={type} size={16} />
                   </span>
                   <span className="embed-item-text">
                     <span className="embed-item-name">{doc.name}</span>

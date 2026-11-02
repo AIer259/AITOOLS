@@ -1,10 +1,16 @@
 import type { Editor } from '@tiptap/core'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
+import { useNoteStore } from '../store/useNoteStore'
+import { DOC_TYPE_META, type TreeNode } from '../types'
+import { attachmentFolderName, collectEmbeddedDocIds } from './embedRefs'
 import { highlightCodeElements } from './codeHighlight'
+import { loadBlob } from './db'
 import { EXPORT_CSS } from './exportStyles'
 import { escapeHtml } from './html'
 import { extensionForMime, getAssetMeta, loadAssetBlob } from './imageAssets'
+import { docJsonToHtml } from './renderDoc'
+import { findAttachmentFolder } from './treeDrag'
 
 interface ExportImage {
   path: string
@@ -19,6 +25,7 @@ interface HydratedExport {
 interface NormalizeExportOptions {
   keepColgroup?: boolean
   flattenDetails?: boolean
+  embedPaths?: Map<string, string>
 }
 
 function createDetailsBlock(
@@ -59,7 +66,7 @@ function normalizeDetails(container: HTMLElement, flatten: boolean): void {
 
 function normalizeExportHtml(
   html: string,
-  { keepColgroup = false, flattenDetails = false }: NormalizeExportOptions = {},
+  { keepColgroup = false, flattenDetails = false, embedPaths }: NormalizeExportOptions = {},
 ): string {
   const container = document.createElement('div')
   container.innerHTML = html
@@ -106,13 +113,20 @@ function normalizeExportHtml(
     element.removeAttribute('contenteditable')
   })
 
-  // 嵌入文档在导出文件里显示为说明卡片
+  // 嵌入文档在导出文件里显示为说明卡片；ZIP 导出时附带相对路径标记
   container.querySelectorAll('[data-type="documentEmbed"]').forEach((embed) => {
     const name = embed.getAttribute('data-name') || '嵌入文档'
     const type = embed.getAttribute('data-doc-type')
+    const docId = embed.getAttribute('data-doc-id') ?? ''
     const label = type === 'pdf' ? 'PDF' : type === 'docx' ? 'Word' : 'Markdown'
+    const path = embedPaths?.get(docId)
     const card = document.createElement('div')
     card.className = 'export-embed'
+    if (path) {
+      card.setAttribute('data-doc-embed', path)
+      card.setAttribute('data-doc-type', type ?? 'md')
+      card.setAttribute('data-doc-name', name)
+    }
     card.textContent = `📄 嵌入文档：${name}（${label}）`
     embed.replaceWith(card)
   })
@@ -227,7 +241,11 @@ async function waitForImages(container: ParentNode): Promise<void> {
   )
 }
 
-function buildMarkdownFromHtml(html: string, title: string): string {
+function buildMarkdownFromHtml(
+  html: string,
+  title: string,
+  embedPaths?: Map<string, string>,
+): string {
   const service = new TurndownService({
     headingStyle: 'atx',
     hr: '---',
@@ -260,9 +278,14 @@ function buildMarkdownFromHtml(html: string, title: string): string {
       return `\n\n> 💡\n>\n${quoted.join('\n')}\n\n`
     },
   })
+  service.addRule('embedFile', {
+    filter: (node) =>
+      node.nodeName === 'DIV' && (node as HTMLElement).hasAttribute('data-doc-embed'),
+    replacement: (_content, node) => `\n\n${(node as HTMLElement).outerHTML}\n\n`,
+  })
 
   const container = document.createElement('div')
-  container.innerHTML = normalizeExportHtml(html)
+  container.innerHTML = normalizeExportHtml(html, { embedPaths })
   container
     .querySelectorAll('[data-callout] .note-callout-icon')
     .forEach((icon) => icon.remove())
@@ -280,14 +303,85 @@ export async function exportMarkdown(editor: Editor, title: string): Promise<voi
   )
 }
 
+interface AttachmentExport {
+  path: string
+  blob: Blob
+}
+
+interface AttachmentBundle {
+  attachments: AttachmentExport[]
+  paths: Map<string, string>
+}
+
+async function buildAttachmentExports(editor: Editor, title: string): Promise<AttachmentBundle> {
+  const docIds = collectEmbeddedDocIds(editor.getJSON())
+  const nodes = useNoteStore.getState().nodes
+  const active = nodes.find((node) => node.id === useNoteStore.getState().activeId)
+  const folder = active ? findAttachmentFolder(nodes, active) : undefined
+  const candidates = new Map<string, TreeNode>()
+
+  for (const docId of docIds) {
+    const doc = nodes.find((node) => node.id === docId && node.kind === 'doc')
+    if (doc) candidates.set(doc.id, doc)
+  }
+  if (folder) {
+    for (const node of nodes) {
+      if (node.kind === 'doc' && node.parentId === folder.id) candidates.set(node.id, node)
+    }
+  }
+
+  const defaultFolder = safeFolderName(attachmentFolderName(title))
+  const usedNames = new Set<string>()
+  const attachments: AttachmentExport[] = []
+  const paths = new Map<string, string>()
+
+  for (const doc of candidates.values()) {
+    const parent = nodes.find((node) => node.id === doc.parentId)
+    const folderPath = parent?.kind === 'folder' ? safeFolderName(parent.name) : defaultFolder
+    const type = doc.docType ?? 'md'
+    const meta = DOC_TYPE_META[type]
+    const extension = meta.extension
+    const base = safeFileName(doc.name) || '嵌入文档'
+
+    let filename = `${base}.${extension}`
+    let counter = 2
+    while (usedNames.has(filename.toLowerCase())) {
+      filename = `${base} (${counter}).${extension}`
+      counter += 1
+    }
+    usedNames.add(filename.toLowerCase())
+
+    let blob: Blob | null = null
+    if (type === 'pdf' || type === 'docx') {
+      if (!doc.blobId) continue
+      const buffer = await loadBlob(doc.blobId)
+      if (!buffer) continue
+      blob = new Blob([buffer], { type: meta.mime })
+    } else {
+      const html = docJsonToHtml(doc.content)
+      const hydrated = await hydrateImagesForExport(html, doc.name, 'data-url')
+      const markdown = buildMarkdownFromHtml(hydrated.html, doc.name)
+      blob = new Blob([markdown], { type: `${meta.mime};charset=utf-8` })
+    }
+
+    const path = `${folderPath}/${filename}`
+    attachments.push({ path, blob })
+    paths.set(doc.id, path)
+  }
+
+  return { attachments, paths }
+}
+
 export async function exportMarkdownZip(editor: Editor, title: string): Promise<void> {
+  const { attachments, paths } = await buildAttachmentExports(editor, title)
   const { html, images } = await hydrateImagesForExport(editor.getHTML(), title, 'files')
-  const markdown = buildMarkdownFromHtml(html, title)
+  const markdown = buildMarkdownFromHtml(html, title, paths)
   const JSZip = (await import('jszip')).default
   const zip = new JSZip()
 
   zip.file(`${safeFileName(title)}.md`, markdown)
   for (const image of images) zip.file(image.path, image.blob)
+  for (const attachment of attachments) zip.file(attachment.path, attachment.blob)
 
   const blob = await zip.generateAsync({ type: 'blob' })
   downloadBlob(blob, `${safeFileName(title)}-images.zip`)

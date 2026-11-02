@@ -2,6 +2,7 @@ import type { JSONContent } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react'
+import { migrateFlatEmbeds } from '../../lib/attachments'
 import { createEditorExtensions } from '../../lib/editorExtensions'
 import { collectImageFiles, saveImageAsset } from '../../lib/imageAssets'
 import { useNoteStore } from '../../store/useNoteStore'
@@ -42,6 +43,10 @@ export function NoteEditor({ node }: NoteEditorProps) {
     setEditor(editor ?? null)
     return () => setEditor(null)
   }, [editor, setEditor])
+
+  useEffect(() => {
+    migrateFlatEmbeds(node.id)
+  }, [node.id])
 
   const appendParagraph = () => {
     if (!editor) return

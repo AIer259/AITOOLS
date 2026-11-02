@@ -1,8 +1,6 @@
 import {
   ChevronRight,
-  File,
   FileText,
-  FileType2,
   Folder,
   FolderOpen,
   MoreHorizontal,
@@ -10,9 +8,19 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type DragEvent as ReactDragEvent } from 'react'
+import { showMoveResult } from '../../lib/moveFeedback'
+import {
+  canDragNode,
+  canDropOnFolder,
+  findAttachmentFolder,
+  getDraggedNodeId,
+  setDraggedNodeId,
+} from '../../lib/treeDrag'
+import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
-import type { DocType, NodeKind, TreeNode } from '../../types'
+import type { NodeKind, TreeNode } from '../../types'
+import { DocTypeIcon } from '../common/DocTypeIcon'
 import { ConfirmDialog, NameDialog } from '../common/Dialogs'
 import { PopupMenu } from '../common/PopupMenu'
 
@@ -22,16 +30,14 @@ interface TreeItemProps {
   nodes: TreeNode[]
 }
 
-function DocIcon({ docType }: { docType?: DocType }) {
-  if (docType === 'pdf') return <File size={15} />
-  if (docType === 'docx') return <FileType2 size={15} />
-  return <FileText size={15} />
-}
-
 export function TreeItem({ node, depth, nodes }: TreeItemProps) {
-  const active = useNoteStore((state) => state.activeId === node.id)
+  const activeId = useNoteStore((state) => state.activeId)
   const expanded = useNoteStore((state) => state.expanded[node.id] ?? true)
-  const setActive = useNoteStore((state) => state.setActive)
+  const browse = useNavigationStore((state) => state.browse)
+  const active = activeId === node.id && !browse
+  const browsing = browse?.folderId === node.id
+  const openFolder = useNavigationStore((state) => state.openFolder)
+  const openDocument = useNavigationStore((state) => state.openDocument)
   const toggleExpanded = useNoteStore((state) => state.toggleExpanded)
   const createNode = useNoteStore((state) => state.createNode)
   const renameNode = useNoteStore((state) => state.renameNode)
@@ -42,23 +48,95 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
   const [createKind, setCreateKind] = useState<NodeKind | null>(null)
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [dropTarget, setDropTarget] = useState(false)
+  const draggable = canDragNode(nodes, node)
 
   const children = useMemo(
     () => nodes.filter((child) => child.parentId === node.id),
     [nodes, node.id],
   )
+  const hasAttachmentFolder = deleting && Boolean(findAttachmentFolder(nodes, node))
 
   const handleRowClick = () => {
-    if (node.kind === 'folder') toggleExpanded(node.id)
-    else setActive(node.id)
+    if (node.kind === 'folder') openFolder(node.area, node.id)
+    else openDocument(node.id)
+  }
+
+  const handleDragStart = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!draggable) {
+      event.preventDefault()
+      return
+    }
+
+    setDraggedNodeId(node.id)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('application/x-ainb-node', node.id)
+    event.dataTransfer.setData('text/plain', node.id)
+    setDragging(true)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedNodeId(null)
+    setDragging(false)
+    setDropTarget(false)
+  }
+
+  const handleDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('application/x-ainb-node')) return
+    // 行内事件不再冒泡到区域标题
+    event.stopPropagation()
+    if (node.kind !== 'folder') return
+
+    const dragId = getDraggedNodeId()
+    if (!dragId || !canDropOnFolder(nodes, dragId, node.id)) return
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDropTarget(true)
+  }
+
+  const handleDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    const related = event.relatedTarget as Node | null
+    if (related && event.currentTarget.contains(related)) return
+    setDropTarget(false)
+  }
+
+  const handleDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('application/x-ainb-node')) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    const dragId = getDraggedNodeId()
+    setDraggedNodeId(null)
+    setDragging(false)
+    setDropTarget(false)
+
+    if (!dragId || node.kind !== 'folder') return
+    if (!canDropOnFolder(nodes, dragId, node.id)) {
+      showMoveResult('invalid')
+      return
+    }
+
+    showMoveResult(
+      useNoteStore.getState().moveNodeTo(dragId, { area: node.area, parentId: node.id }),
+    )
   }
 
   return (
     <div className="tree-node">
       <div
-        className={`tree-row${active ? ' active' : ''}`}
+        className={`tree-row${active ? ' active' : ''}${browsing ? ' is-browsing' : ''}${
+          dragging ? ' is-dragging' : ''
+        }${dropTarget ? ' is-drop-target' : ''}`}
         style={{ paddingLeft: 6 + depth * 14 }}
+        draggable={draggable}
         onClick={handleRowClick}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         title={node.name}
       >
         <span className="row-chevron">
@@ -88,7 +166,7 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
               <Folder size={15} />
             )
           ) : (
-            <DocIcon docType={node.docType} />
+            <DocTypeIcon docType={node.docType} size={15} />
           )}
         </span>
 
@@ -201,7 +279,9 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
           message={
             node.kind === 'folder'
               ? `将删除「${node.name}」及其中所有内容，删除后无法恢复。`
-              : `确定删除「${node.name}」吗？删除后无法恢复。`
+              : hasAttachmentFolder
+                ? `将删除「${node.name}」及其附件文件夹，删除后无法恢复。`
+                : `确定删除「${node.name}」吗？删除后无法恢复。`
           }
           onCancel={() => setDeleting(false)}
           onConfirm={() => {

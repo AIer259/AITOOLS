@@ -9,6 +9,21 @@ export function getChildren(nodes: TreeNode[], parentId: string | null, area?: T
   return nodes.filter((node) => node.parentId === parentId && (!area || node.area === area))
 }
 
+export function findFolder(
+  nodes: TreeNode[],
+  area: TreeNode['area'],
+  parentId: string | null,
+  name: string,
+): TreeNode | undefined {
+  return nodes.find(
+    (node) =>
+      node.kind === 'folder' &&
+      node.area === area &&
+      node.parentId === parentId &&
+      node.name === name,
+  )
+}
+
 /** 从根到当前节点的路径（含当前节点） */
 export function getPath(nodes: TreeNode[], id: string | null): TreeNode[] {
   const path: TreeNode[] = []

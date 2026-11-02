@@ -2,6 +2,31 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 工作区浏览：点击「空间 / 私人」或文件夹，中栏显示其下的文件夹与文档；顶部面包屑可点击返回上级区域或文件夹。
+- 嵌入文档归档：新嵌入的文档放入主笔记同级的「<主文件名>附件」文件夹；打开旧笔记时，与主文件平级的嵌入文档会自动迁入；附件文件夹默认折叠。
+- 目录默认只显示一、二级，三级及之后折叠；用户手动展开/折叠在编辑过程中保留，切换笔记后恢复默认。
+- 删除主文件时同步删除其附件文件夹与嵌入文档。
+- 左侧支持拖拽文档 / 文件夹到目标文件夹或区域根目录；拖动主文件时附件文件夹与嵌入文档同步移动，附件内文档跨区域时 `area` 一并更新；附件文件夹及其中文档不可单独拖拽；目标已有同名附件文件夹时阻止移动并提示。
+- Markdown ZIP 导出包含附件文件夹；导入 ZIP 时恢复附件文档与嵌入卡片（Markdown / PDF / Word），附件文件夹内未嵌入的文件也会一起导入。
+- 导入支持 Markdown + 图片 ZIP：读取压缩包中的 Markdown 与 `assets/photos/` 图片，写入资源库后转换为可编辑笔记。
+- 单文件 Markdown 导入支持 data URI 图片，导出后可在另一台电脑直接恢复图片。
+
+### Fixed
+
+- 修复导出的带图片 Markdown 无法在另一台电脑导入的问题。
+
+### Tests
+
+- 新增 `scripts/check-import-zip.mjs`，覆盖 ZIP 与单文件 data URI 图片导入、资源写入与刷新后持久化。
+- 新增 `scripts/check-workspace.mjs`，覆盖区域/文件夹浏览、面包屑回退、侧栏高亮与刷新行为。
+- 新增 `scripts/check-embed-export.mjs`，覆盖嵌入文档归档、附件文件夹默认折叠、ZIP 导出附件、跨设备导入恢复 Markdown / PDF / Word 嵌入，以及删除主文件同步删除附件。
+- 新增 `scripts/check-toc-default.mjs`，覆盖目录默认展开一、二级、三级及之后折叠与手动展开。
+- 新增 `scripts/check-tree-drag.mjs`，覆盖主文件附件捆绑移动、跨区域 area 更新、附件节点锁定与同名附件冲突。
+
 ## [0.11.0] - 2026-11-02
 
 ### Added

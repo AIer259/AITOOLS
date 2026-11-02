@@ -6,8 +6,10 @@ import { NoteEditor } from './components/Editor/NoteEditor'
 import { TopBar } from './components/Editor/TopBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TocPanel } from './components/Toc/TocPanel'
+import { WorkspaceView } from './components/Workspace/WorkspaceView'
 import { ToastStack } from './components/common/ToastStack'
 import { sweepUnusedAssets } from './lib/imageAssets'
+import { useNavigationStore } from './store/useNavigationStore'
 import { useNoteStore } from './store/useNoteStore'
 import { useUiStore } from './store/useUiStore'
 
@@ -16,6 +18,7 @@ export default function App() {
   const nodes = useNoteStore((state) => state.nodes)
   const activeId = useNoteStore((state) => state.activeId)
   const init = useNoteStore((state) => state.init)
+  const browsing = useNavigationStore((state) => state.browse !== null)
   const tocOpen = useUiStore((state) => state.tocOpen)
   const refreshStorage = useUiStore((state) => state.refreshStorage)
   const startupRef = useRef(false)
@@ -44,14 +47,17 @@ export default function App() {
 
   const active = nodes.find((node) => node.id === activeId)
   const isFilePreview = active?.docType === 'pdf' || active?.docType === 'docx'
+  const showToc = tocOpen && !browsing
 
   return (
     <>
-      <div className={`app${tocOpen ? ' with-toc' : ''}`}>
+      <div className={`app${showToc ? ' with-toc' : ''}`}>
         <Sidebar />
         <main className="main">
           <TopBar />
-          {active ? (
+          {browsing ? (
+            <WorkspaceView />
+          ) : active ? (
             isFilePreview ? (
               <FilePreview key={active.id} node={active} />
             ) : (
@@ -61,7 +67,7 @@ export default function App() {
             <EmptyState />
           )}
         </main>
-        {tocOpen && <TocPanel />}
+        {showToc && <TocPanel />}
       </div>
       <EmbedPicker />
       <ToastStack />

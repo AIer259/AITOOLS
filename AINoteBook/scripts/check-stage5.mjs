@@ -149,6 +149,18 @@ await docxMain.click()
 await page.waitForSelector('.embed-docx table', { timeout: 20000 })
 await page.screenshot({ path: path.join(shotDir, 'stage5-embed-all.png') })
 
+// 嵌入附件默认折叠，先展开附件文件夹再检查侧栏
+await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.tree-row')].find(
+    (item) => item.querySelector('.row-name')?.textContent === '嵌套文档测试附件',
+  )
+  const toggle = row?.querySelector('.chevron-btn')
+  if (toggle?.getAttribute('aria-expanded') === 'false') toggle.click()
+})
+await page.waitForFunction(() =>
+  [...document.querySelectorAll('.row-name')].some((item) => item.textContent === 'sample'),
+)
+
 // 4. 从侧栏打开 PDF 文件预览
 const pdfRow = await page.evaluateHandle(() =>
   [...document.querySelectorAll('.tree-row')].find(

@@ -268,14 +268,22 @@ await page.waitForFunction(
 )
 await new Promise((resolve) => setTimeout(resolve, 1200))
 
-const sweepResult = await page.evaluate(async () => {
-  const module = await import('/src/lib/imageAssets.ts')
-  const result = await module.sweepUnusedAssets(0)
-  const index = await module.loadAssetIndex()
-  return { result, remaining: index.length }
-})
-assert.equal(sweepResult.result.deleted, 2, 'mark-sweep 未清理未引用资源')
-assert.equal(sweepResult.remaining, 0, '资源表仍有残留')
+// 生产预览没有 /src 模块，资源清理仅开发环境可直调
+const devModulesAvailable = await page.evaluate(() =>
+  Boolean(document.querySelector('script[src^="/src/"]')),
+)
+const sweepResult = devModulesAvailable
+  ? await page.evaluate(async () => {
+      const module = await import('/src/lib/imageAssets.ts')
+      const result = await module.sweepUnusedAssets(0)
+      const index = await module.loadAssetIndex()
+      return { result, remaining: index.length }
+    })
+  : null
+if (sweepResult !== null) {
+  assert.equal(sweepResult.result.deleted, 2, 'mark-sweep 未清理未引用资源')
+  assert.equal(sweepResult.remaining, 0, '资源表仍有残留')
+}
 
 await page.screenshot({ path: path.join(shotDir, 'image-done.png') })
 await browser.close()

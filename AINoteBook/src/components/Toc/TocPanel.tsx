@@ -1,6 +1,13 @@
 import { ChevronRight, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { buildTocTree, extractToc, flattenToc, type TocItem } from '../../lib/toc'
+import {
+  buildTocTree,
+  extractToc,
+  flattenToc,
+  isTocCollapsed,
+  type TocItem,
+  type TocNode,
+} from '../../lib/toc'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 
@@ -11,7 +18,7 @@ export function TocPanel() {
 
   const [items, setItems] = useState<TocItem[]>([])
   const [activePos, setActivePos] = useState<number | null>(null)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<Map<string, boolean>>(new Map())
 
   const tree = useMemo(() => buildTocTree(items), [items])
   const rows = useMemo(() => flattenToc(tree, collapsed), [tree, collapsed])
@@ -31,7 +38,7 @@ export function TocPanel() {
   }, [editor, activeId])
 
   useEffect(() => {
-    setCollapsed(new Set())
+    setCollapsed(new Map())
     setActivePos(null)
   }, [activeId])
 
@@ -41,11 +48,10 @@ export function TocPanel() {
     setActivePos(item.pos)
   }
 
-  const toggleCollapsed = (id: string) => {
+  const toggleCollapsed = (node: TocNode) => {
     setCollapsed((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const next = new Map(current)
+      next.set(node.id, !isTocCollapsed(node, current))
       return next
     })
   }
@@ -65,7 +71,7 @@ export function TocPanel() {
         ) : (
           rows.map((node) => {
             const hasChildren = node.children.length > 0
-            const isCollapsed = collapsed.has(node.id)
+            const isCollapsed = isTocCollapsed(node, collapsed)
 
             return (
               <div
@@ -80,7 +86,7 @@ export function TocPanel() {
                     title={isCollapsed ? '展开下级目录' : '折叠下级目录'}
                     aria-label={isCollapsed ? '展开下级目录' : '折叠下级目录'}
                     aria-expanded={!isCollapsed}
-                    onClick={() => toggleCollapsed(node.id)}
+                    onClick={() => toggleCollapsed(node)}
                   >
                     <ChevronRight size={13} />
                   </button>

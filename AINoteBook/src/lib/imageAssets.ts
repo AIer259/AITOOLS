@@ -41,8 +41,18 @@ const MIME_EXT: Record<string, string> = {
   'image/avif': 'avif',
 }
 
+const EXT_MIME: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(MIME_EXT).map(([mime, ext]) => [ext, mime])),
+  jpeg: 'image/jpeg',
+}
+
 export function extensionForMime(mime: string): string {
   return MIME_EXT[mime] ?? 'png'
+}
+
+export function imageMimeFromName(name: string): string {
+  const extension = name.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_MIME[extension] ?? 'image/png'
 }
 
 export function sanitizePathSegment(value: string): string {

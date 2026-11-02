@@ -2,9 +2,19 @@ import type { JSONContent } from '@tiptap/core'
 import { create } from 'zustand'
 import { STORAGE_KEYS } from '../lib/constants'
 import { loadTree, removeBlob, saveTree } from '../lib/db'
+import { isAttachmentFolderName } from '../lib/embedRefs'
 import { createSeedNodes } from '../lib/seed'
-import { firstDoc, getDescendantIds } from '../lib/tree'
-import type { Area, DocType, NodeKind, Theme, TreeNode } from '../types'
+import {
+  findAttachmentFolder,
+  findFlatEmbeddedDocs,
+  isAttachmentFolder,
+  isEmbeddedNode,
+  type MoveOptions,
+  type MoveResult,
+  type MoveTarget,
+} from '../lib/treeDrag'
+import { findFolder, firstDoc, getDescendantIds } from '../lib/tree'
+import type { Area, DocType, NodeKind, NodeLocation, Theme, TreeNode } from '../types'
 
 export type SaveState = 'idle' | 'saving' | 'saved'
 
@@ -17,6 +27,7 @@ interface CreateNodeInput {
   content?: JSONContent
   blobId?: string
   activate?: boolean
+  expanded?: boolean
 }
 
 interface NoteStore {
@@ -29,6 +40,7 @@ interface NoteStore {
   init: () => Promise<void>
   setActive: (id: string | null) => void
   createNode: (input: CreateNodeInput) => string
+  moveNodeTo: (id: string, target: MoveTarget, options?: MoveOptions) => MoveResult
   renameNode: (id: string, name: string) => void
   deleteNode: (id: string) => void
   updateContent: (id: string, content: JSONContent) => void
@@ -130,7 +142,7 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
 
       const expanded: Record<string, boolean> = {}
       for (const node of nodes) {
-        if (node.kind === 'folder') expanded[node.id] = true
+        if (node.kind === 'folder') expanded[node.id] = !isAttachmentFolder(nodes, node)
       }
 
       set({ nodes, activeId, theme, expanded, ready: true, saveState: 'saved' })
@@ -153,7 +165,17 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     set({ expanded })
   },
 
-  createNode: ({ area, parentId, kind, name, docType, content, blobId, activate }) => {
+  createNode: ({
+    area,
+    parentId,
+    kind,
+    name,
+    docType,
+    content,
+    blobId,
+    activate,
+    expanded: expandedOnCreate,
+  }) => {
     const fallback = kind === 'doc' ? '未命名文档' : '新建文件夹'
     const finalName = name.trim() || fallback
     const id = makeId()
@@ -180,8 +202,11 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
 
     const nodes = [...get().nodes, node]
     const expanded = { ...get().expanded }
-    if (parentId) expanded[parentId] = true
-    if (kind === 'folder') expanded[id] = true
+    const parentNode = parentId ? get().nodes.find((item) => item.id === parentId) : undefined
+    if (parentId && !isAttachmentFolderName(parentNode?.name ?? '')) {
+      expanded[parentId] = true
+    }
+    if (kind === 'folder') expanded[id] = expandedOnCreate ?? true
 
     set({ nodes, expanded })
     if (kind === 'doc' && activate !== false) {
@@ -190,6 +215,75 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     }
     queueSave(nodes, set)
     return id
+  },
+
+  moveNodeTo: (id, target, options) => {
+    const nodes = get().nodes
+    const node = nodes.find((item) => item.id === id)
+    if (!node) return 'invalid'
+
+    const targetFolder = target.parentId
+      ? nodes.find((item) => item.id === target.parentId)
+      : undefined
+    if (target.parentId && targetFolder?.kind !== 'folder') return 'invalid'
+    if (isAttachmentFolder(nodes, node) || isEmbeddedNode(nodes, node)) return 'invalid'
+    if (
+      targetFolder &&
+      !options?.allowAttachmentTarget &&
+      (isAttachmentFolder(nodes, targetFolder) || isEmbeddedNode(nodes, targetFolder))
+    ) {
+      return 'invalid'
+    }
+
+    // 根节点集合：普通节点自身；主文档还包括附件文件夹与平级嵌入文档
+    const rootIds = new Set<string>([id])
+    if (node.kind === 'doc') {
+      const attachmentFolder = findAttachmentFolder(nodes, node)
+      if (attachmentFolder) {
+        const conflict = findFolder(
+          nodes,
+          target.area,
+          target.parentId,
+          attachmentFolder.name,
+        )
+        if (conflict && conflict.id !== attachmentFolder.id) return 'conflict'
+        rootIds.add(attachmentFolder.id)
+      }
+
+      for (const embedded of findFlatEmbeddedDocs(nodes, node)) {
+        rootIds.add(embedded.id)
+      }
+    }
+
+    const movingIds = new Set<string>()
+    for (const rootId of rootIds) {
+      for (const movingId of getDescendantIds(nodes, rootId)) movingIds.add(movingId)
+    }
+
+    if (node.kind === 'folder' && target.parentId && movingIds.has(target.parentId)) {
+      return 'invalid'
+    }
+
+    const now = Date.now()
+    const next = nodes.map((item) => {
+      if (!movingIds.has(item.id)) return item
+      const root = rootIds.has(item.id)
+      return {
+        ...item,
+        area: target.area,
+        ...(root ? { parentId: target.parentId } : {}),
+        updatedAt: now,
+      }
+    })
+
+    const expanded = { ...get().expanded }
+    if (target.parentId && !isAttachmentFolderName(targetFolder?.name ?? '')) {
+      expanded[target.parentId] = true
+    }
+
+    set({ nodes: next, expanded })
+    queueSave(next, set)
+    return 'ok'
   },
 
   renameNode: (id, name) => {
@@ -202,9 +296,23 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
 
   deleteNode: (id) => {
     const nodes = get().nodes
-    if (!nodes.some((node) => node.id === id)) return
+    const target = nodes.find((node) => node.id === id)
+    if (!target) return
 
     const ids = getDescendantIds(nodes, id)
+
+    // 删除文档时一并删除它的附件文件夹与仍未迁移的平级嵌入文档
+    if (target.kind === 'doc') {
+      const folder = findAttachmentFolder(nodes, target)
+      if (folder) {
+        for (const folderId of getDescendantIds(nodes, folder.id)) ids.add(folderId)
+      }
+
+      for (const doc of findFlatEmbeddedDocs(nodes, target)) {
+        for (const childId of getDescendantIds(nodes, doc.id)) ids.add(childId)
+      }
+    }
+
     const removed = nodes.filter((node) => ids.has(node.id))
     const remaining = nodes.filter((node) => !ids.has(node.id))
 
@@ -252,3 +360,13 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     get().setTheme(get().theme === 'dark' ? 'light' : 'dark')
   },
 }))
+
+/** 当前活动文档所在位置；没有活动文档时回退到空间根目录 */
+export function getActiveLocation(): NodeLocation {
+  const { activeId, nodes } = useNoteStore.getState()
+  const active = nodes.find((node) => node.id === activeId)
+  return {
+    area: active?.area ?? 'space',
+    parentId: active ? active.parentId : null,
+  }
+}

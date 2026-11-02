@@ -1,4 +1,4 @@
-import { ChevronRight, File, FileText, FileType2, Trash2 } from 'lucide-react'
+import { ChevronRight, Trash2 } from 'lucide-react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { loadBlob } from '../../lib/db'
@@ -6,12 +6,7 @@ import { hydrateImageElements } from '../../lib/imageAssets'
 import { docJsonToHtml } from '../../lib/renderDoc'
 import { useNoteStore } from '../../store/useNoteStore'
 import { DOC_TYPE_LABEL, type DocType } from '../../types'
-
-function TypeIcon({ type }: { type: DocType }) {
-  if (type === 'pdf') return <File size={15} />
-  if (type === 'docx') return <FileType2 size={15} />
-  return <FileText size={15} />
-}
+import { DocTypeIcon } from '../common/DocTypeIcon'
 
 export function EmbedNodeView(props: NodeViewProps) {
   const docId = String(props.node.attrs.docId ?? '')
@@ -150,7 +145,7 @@ export function EmbedNodeView(props: NodeViewProps) {
             <ChevronRight size={14} />
           </span>
           <span className="embed-icon">
-            <TypeIcon type={docType} />
+            <DocTypeIcon docType={docType} size={15} />
           </span>
           <span className="embed-name">{name}</span>
           <span className="embed-badge">{DOC_TYPE_LABEL[docType]}</span>

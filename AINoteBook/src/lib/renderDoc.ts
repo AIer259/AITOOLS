@@ -17,9 +17,18 @@ const EmbedPlaceholder = Node.create({
 
   addAttributes() {
     return {
-      docId: { default: null },
-      name: { default: '' },
-      docType: { default: 'md' },
+      docId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-doc-id'),
+      },
+      name: {
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-name') ?? '',
+      },
+      docType: {
+        default: 'md',
+        parseHTML: (element) => element.getAttribute('data-doc-type') ?? 'md',
+      },
     }
   },
 

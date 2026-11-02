@@ -4,6 +4,13 @@ import type { TreeNode } from '../types'
 const TREE_KEY = 'ainb.tree.v1'
 const BLOB_PREFIX = 'ainb.blob.'
 
+export function createBlobId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export async function loadTree(): Promise<TreeNode[] | null> {
   try {
     const value = await get<TreeNode[]>(TREE_KEY)
