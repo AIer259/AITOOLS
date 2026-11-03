@@ -10,9 +10,19 @@
 - 启动更新检测：线上版读取同源 `version.json`，发现新版本时弹窗提示；确认后刷新页面加载最新构建，选择「稍后」在本次会话内不再提示。
 - 新增 `npm run build:pages`，以 `/AITOOLS/AINoteBook/` 为 base 构建线上版本。
 
+### Changed
+
+- 重构依赖方向：新增 `domain/` 纯领域命令与 `application/` 用例层；移除 `lib -> store` 反向依赖，`useNoteStore` 改为编排用例与持久化。
+- 新增架构守卫 `npm run check:arch`，禁止 `lib -> store`、`store -> components` 等反向依赖；`npm run check` 已包含该检查。
+- 图片灯箱改为全宽显示，右上角小 × 关闭，长图可在灯箱内滚动。
+- 数据模型重构：树元数据改为 `ainb.tree.v2`，Markdown 正文拆分到 `ainb.node.<id>` 独立键；文档增加 `attachmentFolderId`，附件文件夹增加 `ownerDocId`；节点增加 fractional-index `order`，首次加载自动从 `ainb.tree.v1` 迁移。
+
 ### Tests
 
 - 新增 `scripts/check-update.mjs`，覆盖新版本弹窗、稍后、立即更新、同版本与请求失败。
+- 新增 `scripts/check-architecture.mjs`，检查 domain/application/lib/store 的依赖方向。
+- `check-embed-md.mjs` 在检查文件树前先展开附件文件夹，匹配附件默认折叠行为。
+- 更新 `check-image.mjs`、`check-tree-drag.mjs` 等自测，改为读取 `ainb.tree.v2` 与 `ainb.node.<id>`；测试夹具通过清空 v2 触发 v1 迁移。
 
 ## [0.12.0] - 2026-11-02
 

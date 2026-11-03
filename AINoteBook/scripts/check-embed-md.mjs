@@ -120,6 +120,20 @@ try {
   assert.deepEqual(preview.items, ['列表甲', '列表乙'], 'Markdown 列表未渲染')
   assert.ok(preview.code.includes('def answer'), 'Markdown 代码块未渲染')
 
+  const attachmentChevron = '.tree-row[title="嵌入Markdown测试附件"] .chevron-btn'
+  const attachmentExpanded = await page.$eval(
+    attachmentChevron,
+    (el) => el.getAttribute('aria-expanded') === 'true',
+  )
+  if (!attachmentExpanded) await page.click(attachmentChevron)
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll('.tree-row')].some((el) =>
+        el.textContent?.includes('embed-sample'),
+      ),
+    { timeout: 10000 },
+  )
+
   const treeHasDoc = await page.evaluate(() =>
     [...document.querySelectorAll('.tree-row')].some((el) =>
       el.textContent?.includes('embed-sample'),

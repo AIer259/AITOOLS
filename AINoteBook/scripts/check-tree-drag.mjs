@@ -116,7 +116,7 @@ async function readTree() {
     })
     return new Promise((resolve, reject) => {
       const tx = db.transaction('keyval', 'readonly')
-      const request = tx.objectStore('keyval').get('ainb.tree.v1')
+      const request = tx.objectStore('keyval').get('ainb.tree.v2')
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
@@ -206,6 +206,7 @@ try {
     })
     await new Promise((resolve, reject) => {
       const tx = db.transaction('keyval', 'readwrite')
+      tx.objectStore('keyval').clear()
       tx.objectStore('keyval').put(nodes, 'ainb.tree.v1')
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
@@ -292,6 +293,20 @@ try {
   assert.equal(main.area, 'private')
   assert.equal(main.parentId, null)
   assert.equal(nodes.find((node) => node.id === 'attach-folder').parentId, null)
+  assert.ok(
+    nodes.every((node) => typeof node.order === 'string' && node.order.length > 0),
+    '节点缺少 fractional-index order',
+  )
+  assert.equal(
+    nodes.find((node) => node.id === 'main-note').attachmentFolderId,
+    'attach-folder',
+    '主文档缺少 attachmentFolderId',
+  )
+  assert.equal(
+    nodes.find((node) => node.id === 'attach-folder').ownerDocId,
+    'main-note',
+    '附件文件夹缺少 ownerDocId',
+  )
 
   assert.deepEqual(errors, [], `控制台错误：${errors.join(' | ')}`)
   console.log(

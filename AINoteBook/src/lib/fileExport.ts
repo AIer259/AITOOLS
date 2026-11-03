@@ -1,16 +1,21 @@
-import type { Editor } from '@tiptap/core'
+import type { Editor, JSONContent } from '@tiptap/core'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
-import { useNoteStore } from '../store/useNoteStore'
 import { DOC_TYPE_META, type TreeNode } from '../types'
 import { attachmentFolderName, collectEmbeddedDocIds } from './embedRefs'
 import { highlightCodeElements } from './codeHighlight'
-import { loadBlob } from './db'
+import { loadBlob, loadNodeContent } from './db'
 import { EXPORT_CSS } from './exportStyles'
 import { escapeHtml } from './html'
 import { extensionForMime, getAssetMeta, loadAssetBlob } from './imageAssets'
 import { docJsonToHtml } from './renderDoc'
 import { findAttachmentFolder } from './treeDrag'
+
+export interface ExportContext {
+  nodes: TreeNode[]
+  activeId: string | null
+  readContent?: (id: string) => Promise<JSONContent | undefined>
+}
 
 interface ExportImage {
   path: string
@@ -313,10 +318,14 @@ interface AttachmentBundle {
   paths: Map<string, string>
 }
 
-async function buildAttachmentExports(editor: Editor, title: string): Promise<AttachmentBundle> {
+async function buildAttachmentExports(
+  editor: Editor,
+  title: string,
+  context: ExportContext,
+): Promise<AttachmentBundle> {
   const docIds = collectEmbeddedDocIds(editor.getJSON())
-  const nodes = useNoteStore.getState().nodes
-  const active = nodes.find((node) => node.id === useNoteStore.getState().activeId)
+  const { nodes, activeId } = context
+  const active = nodes.find((node) => node.id === activeId)
   const folder = active ? findAttachmentFolder(nodes, active) : undefined
   const candidates = new Map<string, TreeNode>()
 
@@ -358,7 +367,10 @@ async function buildAttachmentExports(editor: Editor, title: string): Promise<At
       if (!buffer) continue
       blob = new Blob([buffer], { type: meta.mime })
     } else {
-      const html = docJsonToHtml(doc.content)
+      const content = context.readContent
+        ? await context.readContent(doc.id)
+        : await loadNodeContent(doc.id)
+      const html = docJsonToHtml(content)
       const hydrated = await hydrateImagesForExport(html, doc.name, 'data-url')
       const markdown = buildMarkdownFromHtml(hydrated.html, doc.name)
       blob = new Blob([markdown], { type: `${meta.mime};charset=utf-8` })
@@ -372,8 +384,12 @@ async function buildAttachmentExports(editor: Editor, title: string): Promise<At
   return { attachments, paths }
 }
 
-export async function exportMarkdownZip(editor: Editor, title: string): Promise<void> {
-  const { attachments, paths } = await buildAttachmentExports(editor, title)
+export async function exportMarkdownZip(
+  editor: Editor,
+  title: string,
+  context: ExportContext,
+): Promise<void> {
+  const { attachments, paths } = await buildAttachmentExports(editor, title, context)
   const { html, images } = await hydrateImagesForExport(editor.getHTML(), title, 'files')
   const markdown = buildMarkdownFromHtml(html, title, paths)
   const JSZip = (await import('jszip')).default

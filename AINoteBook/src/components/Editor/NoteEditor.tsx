@@ -1,8 +1,13 @@
 import type { JSONContent } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import { EditorContent, useEditor } from '@tiptap/react'
-import { useEffect, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react'
-import { migrateFlatEmbeds } from '../../lib/attachments'
+import {
+  useEffect,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type MouseEvent,
+} from 'react'
 import { createEditorExtensions } from '../../lib/editorExtensions'
 import { collectImageFiles, saveImageAsset } from '../../lib/imageAssets'
 import { useNoteStore } from '../../store/useNoteStore'
@@ -23,11 +28,13 @@ const EMPTY_DOC = {
 export function NoteEditor({ node }: NoteEditorProps) {
   const renameNode = useNoteStore((state) => state.renameNode)
   const updateContent = useNoteStore((state) => state.updateContent)
+  const readContent = useNoteStore((state) => state.readContent)
   const setEditor = useUiStore((state) => state.setEditor)
+  const [contentReady, setContentReady] = useState(false)
 
   const editor = useEditor({
     extensions: createEditorExtensions(),
-    content: node.content ?? EMPTY_DOC,
+    content: EMPTY_DOC,
     editorProps: {
       attributes: {
         class: 'note-prose',
@@ -40,13 +47,32 @@ export function NoteEditor({ node }: NoteEditorProps) {
   })
 
   useEffect(() => {
-    setEditor(editor ?? null)
-    return () => setEditor(null)
-  }, [editor, setEditor])
+    let cancelled = false
+    setContentReady(false)
+
+    readContent(node.id)
+      .then((content) => {
+        if (cancelled) return
+        editor?.commands.setContent(content ?? EMPTY_DOC, { emitUpdate: false })
+        setContentReady(true)
+      })
+      .catch((error) => {
+        console.error('加载笔记内容失败', error)
+        if (cancelled) return
+        editor?.commands.setContent(EMPTY_DOC, { emitUpdate: false })
+        setContentReady(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [node.id, editor, readContent])
 
   useEffect(() => {
-    migrateFlatEmbeds(node.id)
-  }, [node.id])
+    if (!contentReady) return
+    setEditor(editor ?? null)
+    return () => setEditor(null)
+  }, [editor, contentReady, setEditor])
 
   const appendParagraph = () => {
     if (!editor) return
@@ -70,7 +96,7 @@ export function NoteEditor({ node }: NoteEditorProps) {
   }
 
   const handleBlankMouseDown = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || !contentReady) return
     const target = event.target as HTMLElement
     if (target.closest('.ProseMirror')) return
 
@@ -178,7 +204,11 @@ export function NoteEditor({ node }: NoteEditorProps) {
           onDropCapture={handleDrop}
         >
           <div className="note-body-inner">
-            <EditorContent editor={editor} />
+            {contentReady ? (
+              <EditorContent editor={editor} />
+            ) : (
+              <div className="note-loading">正在加载笔记…</div>
+            )}
             <div className="note-add-space" aria-hidden="true" />
           </div>
         </div>

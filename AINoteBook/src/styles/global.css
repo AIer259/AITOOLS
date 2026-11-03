@@ -720,6 +720,13 @@ button {
   min-height: 100%;
 }
 
+.note-loading {
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 .note-paper .note-prose {
   min-height: 0;
 }

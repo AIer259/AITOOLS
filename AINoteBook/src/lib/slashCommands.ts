@@ -1,5 +1,4 @@
 import type { Editor, Range } from '@tiptap/core'
-import { useUiStore } from '../store/useUiStore'
 
 export type SlashIcon =
   | 'text'
@@ -26,6 +25,7 @@ export interface SlashItem {
   icon: SlashIcon
   pinyin: string[]
   keywords: string[]
+  opensEmbedPicker?: boolean
   run: (editor: Editor, range: Range) => void
 }
 
@@ -187,9 +187,9 @@ export const SLASH_ITEMS: SlashItem[] = [
     icon: 'embed',
     pinyin: ['qianruwendang', 'qianru', 'qrwd'],
     keywords: ['embed', 'document', 'doc', 'file', '嵌入', '插入文档'],
+    opensEmbedPicker: true,
     run: (editor, range) => {
       start(editor, range).run()
-      useUiStore.getState().openEmbedPicker(editor.state.selection.from)
     },
   },
 ]

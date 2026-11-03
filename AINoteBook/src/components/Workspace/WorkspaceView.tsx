@@ -1,5 +1,6 @@
 import { FilePlus2, Folder, FolderPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { compareOrder } from '../../lib/fractionalIndex'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
 import { AREA_LABEL, DOC_TYPE_LABEL, type DocType, type NodeKind, type TreeNode } from '../../types'
@@ -13,10 +14,7 @@ function itemMeta(node: TreeNode): string {
 }
 
 function sortItems(items: TreeNode[]): TreeNode[] {
-  return [...items].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1
-    return a.name.localeCompare(b.name, 'zh-CN')
-  })
+  return [...items].sort((a, b) => compareOrder(a.order, b.order))
 }
 
 export function WorkspaceView() {

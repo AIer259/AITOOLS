@@ -11,13 +11,13 @@ import {
   Upload,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
+import type { ImportKind } from '../../application/importDocument'
 import {
   exportMarkdown,
   exportMarkdownZip,
   exportPdfDirect,
   exportPdfPrint,
 } from '../../lib/fileExport'
-import { importDocument, type ImportKind } from '../../lib/fileImport'
 import { getPath } from '../../lib/tree'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
@@ -32,6 +32,7 @@ export function TopBar() {
   const nodes = useNoteStore((state) => state.nodes)
   const activeId = useNoteStore((state) => state.activeId)
   const saveState = useNoteStore((state) => state.saveState)
+  const importDocument = useNoteStore((state) => state.importDocument)
   const browse = useNavigationStore((state) => state.browse)
   const openArea = useNavigationStore((state) => state.openArea)
   const openFolder = useNavigationStore((state) => state.openFolder)
@@ -68,6 +69,7 @@ export function TopBar() {
           ? { area: active.area, parentId: active.parentId }
           : undefined
       const result = await importDocument(file, kind, { target })
+
       showToast(`已导入「${result.name}」`, 'success')
     } catch (error) {
       console.error(error)
@@ -88,7 +90,14 @@ export function TopBar() {
       setBusy(true)
       try {
         if (kind === 'md') await exportMarkdown(editor, active.name)
-        else await exportMarkdownZip(editor, active.name)
+        else {
+          const state = useNoteStore.getState()
+          await exportMarkdownZip(editor, active.name, {
+            nodes: state.nodes,
+            activeId: state.activeId,
+            readContent: state.readContent,
+          })
+        }
         showToast(
           kind === 'md' ? 'Markdown 已导出' : 'Markdown + 图片 ZIP 已导出',
           'success',

@@ -1,8 +1,6 @@
 import { Search, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ensureAttachmentFolder } from '../../lib/attachments'
-import { insertDocumentEmbed, uploadDocumentFile } from '../../lib/documentFiles'
-import { importDocument } from '../../lib/fileImport'
+import { insertDocumentEmbed } from '../../lib/documentFiles'
 import { getPath } from '../../lib/tree'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -39,6 +37,10 @@ export function EmbedPicker() {
 
   const nodes = useNoteStore((state) => state.nodes)
   const activeId = useNoteStore((state) => state.activeId)
+  const ensureAttachmentFolder = useNoteStore((state) => state.ensureAttachmentFolder)
+  const placeEmbeddedDoc = useNoteStore((state) => state.placeEmbeddedDoc)
+  const importDocument = useNoteStore((state) => state.importDocument)
+  const uploadDocumentFile = useNoteStore((state) => state.uploadDocumentFile)
 
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
@@ -78,7 +80,9 @@ export function EmbedPicker() {
       showToast('当前没有可插入的编辑区', 'error')
       return
     }
-    insertDocumentEmbed(editor, insertPos, doc)
+    const active = nodes.find((node) => node.id === activeId)
+    const target = active ? placeEmbeddedDoc(active, doc) : doc
+    insertDocumentEmbed(editor, insertPos, target)
     closePicker()
   }
 
@@ -100,7 +104,9 @@ export function EmbedPicker() {
         kind === 'md'
           ? await importDocument(file, 'md', { activate: false, target })
           : await uploadDocumentFile(file, kind, target)
-      insertDocumentEmbed(editor, insertPos, doc)
+      const activeNow = nodes.find((node) => node.id === activeId)
+      const placed = activeNow ? placeEmbeddedDoc(activeNow, doc) : doc
+      insertDocumentEmbed(editor, insertPos, placed)
       showToast(`已嵌入「${doc.name}」`, 'success')
       closePicker()
     } catch (error) {

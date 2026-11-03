@@ -8,6 +8,7 @@ import {
   type SlashMenuProps,
 } from '../components/Editor/SlashMenu'
 import { filterSlashItems, type SlashItem } from '../lib/slashCommands'
+import { useUiStore } from '../store/useUiStore'
 
 export const slashPluginKey = new PluginKey('slashCommand')
 
@@ -26,6 +27,9 @@ export const SlashCommand = Extension.create({
         items: ({ query }) => filterSlashItems(query),
         command: ({ editor, range, props }) => {
           props.run(editor, range)
+          if (props.opensEmbedPicker) {
+            useUiStore.getState().openEmbedPicker(editor.state.selection.from)
+          }
         },
         render: () => {
           let component: ReactRenderer<SlashMenuHandle> | null = null

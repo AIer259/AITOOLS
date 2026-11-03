@@ -1,12 +1,13 @@
 import { Database, FileText, Folder, Moon, NotebookPen, Plus, Sun } from 'lucide-react'
 import { useEffect, useState, type DragEvent as ReactDragEvent } from 'react'
-import { showMoveResult } from '../../lib/moveFeedback'
+import { showMoveResult } from './moveFeedback'
 import { formatBytes } from '../../lib/storageInfo'
 import {
   canDropOnArea,
   getDraggedNodeId,
   setDraggedNodeId,
 } from '../../lib/treeDrag'
+import { compareOrder } from '../../lib/fractionalIndex'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
@@ -106,7 +107,9 @@ export function Sidebar() {
 
       <div className="sidebar-scroll">
         {SECTIONS.map((section) => {
-          const roots = nodes.filter((node) => node.area === section.area && node.parentId === null)
+          const roots = nodes
+            .filter((node) => node.area === section.area && node.parentId === null)
+            .sort((a, b) => compareOrder(a.order, b.order))
           return (
             <section className="tree-section" key={section.area}>
               <div

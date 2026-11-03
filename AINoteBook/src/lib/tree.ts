@@ -1,12 +1,19 @@
 import type { TreeNode } from '../types'
+import { compareOrder } from './fractionalIndex'
 
 export function getNode(nodes: TreeNode[], id: string | null): TreeNode | undefined {
   if (!id) return undefined
   return nodes.find((node) => node.id === id)
 }
 
-export function getChildren(nodes: TreeNode[], parentId: string | null, area?: TreeNode['area']): TreeNode[] {
-  return nodes.filter((node) => node.parentId === parentId && (!area || node.area === area))
+export function getChildren(
+  nodes: TreeNode[],
+  parentId: string | null,
+  area?: TreeNode['area'],
+): TreeNode[] {
+  return nodes
+    .filter((node) => node.parentId === parentId && (!area || node.area === area))
+    .sort((a, b) => compareOrder(a.order, b.order))
 }
 
 export function findFolder(

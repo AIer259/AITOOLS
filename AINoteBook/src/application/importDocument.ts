@@ -1,14 +1,12 @@
 import { Editor } from '@tiptap/core'
 import type { JSONContent } from '@tiptap/core'
 import { marked } from 'marked'
-import { getActiveLocation, useNoteStore } from '../store/useNoteStore'
+import { attachmentFolderName } from '../lib/embedRefs'
+import { createEditorExtensions } from '../lib/editorExtensions'
+import { imageMimeFromName } from '../lib/imageAssets'
+import { importMarkdownImages } from '../lib/markdownImages'
 import type { NodeLocation, TreeNode } from '../types'
-import { ensureFolder } from './attachments'
-import { createBlobId, saveBlob } from './db'
-import { attachmentFolderName } from './embedRefs'
-import { createEditorExtensions } from './editorExtensions'
-import { imageMimeFromName } from './imageAssets'
-import { importMarkdownImages } from './markdownImages'
+import type { NoteRepository } from './noteRepository'
 
 export type ImportKind = 'md' | 'docx' | 'zip'
 
@@ -20,6 +18,7 @@ export interface ImportDocumentOptions {
 interface ImportedDocument {
   name: string
   content: JSONContent
+  attachmentFolderId?: string
 }
 
 interface ZipEntry {
@@ -119,15 +118,14 @@ async function importAttachmentEntry(
   name: string,
   parentId: string,
   area: NodeLocation['area'],
+  repository: NoteRepository,
 ): Promise<TreeNode | null> {
   const lower = path.toLowerCase()
-  const { createNode } = useNoteStore.getState()
 
   if (lower.endsWith('.pdf') || lower.endsWith('.docx')) {
     const docType = lower.endsWith('.pdf') ? 'pdf' : 'docx'
-    const blobId = createBlobId()
-    await saveBlob(blobId, await entry.async('arraybuffer'))
-    const id = createNode({
+    const blobId = await repository.saveBlob(await entry.async('arraybuffer'))
+    return repository.createNode({
       area,
       parentId,
       kind: 'doc',
@@ -136,7 +134,6 @@ async function importAttachmentEntry(
       blobId,
       activate: false,
     })
-    return useNoteStore.getState().nodes.find((node) => node.id === id) ?? null
   }
 
   if (!lower.endsWith('.md') && !lower.endsWith('.markdown')) return null
@@ -144,7 +141,7 @@ async function importAttachmentEntry(
   const text = await entry.async('string')
   if (!text.trim()) return null
 
-  const id = createNode({
+  return repository.createNode({
     area,
     parentId,
     kind: 'doc',
@@ -152,7 +149,6 @@ async function importAttachmentEntry(
     content: await markdownToContent(text, name),
     activate: false,
   })
-  return useNoteStore.getState().nodes.find((node) => node.id === id) ?? null
 }
 
 async function importMarkdownDocument(file: File): Promise<ImportedDocument> {
@@ -166,6 +162,7 @@ async function importMarkdownDocument(file: File): Promise<ImportedDocument> {
 async function importZipDocument(
   file: File,
   location: NodeLocation,
+  repository: NoteRepository,
 ): Promise<ImportedDocument> {
   const JSZip = (await import('jszip')).default
   const zip = await JSZip.loadAsync(await file.arrayBuffer())
@@ -194,7 +191,7 @@ async function importZipDocument(
   let attachmentFolderId: string | null = null
   const getAttachmentFolder = () => {
     if (!attachmentFolderId) {
-      attachmentFolderId = ensureFolder(location, attachmentFolder)
+      attachmentFolderId = repository.ensureFolder(location, attachmentFolder).id
     }
     return attachmentFolderId
   }
@@ -211,6 +208,7 @@ async function importZipDocument(
       docName,
       getAttachmentFolder(),
       location.area,
+      repository,
     )
     if (node) importedByPath.set(path, node)
   }
@@ -227,9 +225,16 @@ async function importZipDocument(
       path.includes('/')
         ? path.slice(0, path.lastIndexOf('/')).split('/').pop() || attachmentFolder
         : attachmentFolder
-    const folderId = ensureFolder(location, folderName)
+    const folderId = repository.ensureFolder(location, folderName).id
     const docName = documentName(path.split('/').pop() ?? '')
-    const node = await importAttachmentEntry(entry, path, docName, folderId, location.area)
+    const node = await importAttachmentEntry(
+      entry,
+      path,
+      docName,
+      folderId,
+      location.area,
+      repository,
+    )
     if (node) importedByPath.set(path, node)
     return node
   }
@@ -245,7 +250,11 @@ async function importZipDocument(
     },
     resolveEmbed,
   )
-  return { name, content }
+  return {
+    name,
+    content,
+    ...(attachmentFolderId ? { attachmentFolderId } : {}),
+  }
 }
 
 async function importDocxDocument(file: File): Promise<ImportedDocument> {
@@ -257,21 +266,21 @@ async function importDocxDocument(file: File): Promise<ImportedDocument> {
 }
 
 export async function importDocument(
+  repository: NoteRepository,
   file: File,
   kind: ImportKind,
   { activate = true, target }: ImportDocumentOptions = {},
 ): Promise<TreeNode> {
-  const { createNode } = useNoteStore.getState()
-  const location = target ?? getActiveLocation()
+  const location = target ?? repository.activeLocation()
 
   const imported =
     kind === 'zip'
-      ? await importZipDocument(file, location)
+      ? await importZipDocument(file, location, repository)
       : kind === 'md'
         ? await importMarkdownDocument(file)
         : await importDocxDocument(file)
 
-  const id = createNode({
+  const created = repository.createNode({
     area: location.area,
     parentId: location.parentId,
     kind: 'doc',
@@ -280,7 +289,10 @@ export async function importDocument(
     activate,
   })
 
-  const created = useNoteStore.getState().nodes.find((node) => node.id === id)
-  if (!created) throw new Error('创建文档失败')
+  if (imported.attachmentFolderId) {
+    repository.ensureAttachmentFolder(created)
+    return repository.findNode(created.id) ?? created
+  }
+
   return created
 }

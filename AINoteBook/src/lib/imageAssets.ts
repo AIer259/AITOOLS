@@ -1,7 +1,7 @@
 import type { JSONContent } from '@tiptap/core'
 import { del, get, set } from 'idb-keyval'
 import type { TreeNode } from '../types'
-import { loadTree } from './db'
+import { loadNodeContent, loadTree } from './db'
 
 export interface AssetMeta {
   id: string
@@ -214,7 +214,7 @@ export function collectImageFiles(data: DataTransfer | null): File[] {
     .filter((file): file is File => Boolean(file))
 }
 
-export function collectReferencedAssetIds(nodes: TreeNode[]): Set<string> {
+export async function collectReferencedAssetIds(nodes: TreeNode[]): Promise<Set<string>> {
   const ids = new Set<string>()
 
   const visit = (content: JSONContent | undefined) => {
@@ -225,9 +225,14 @@ export function collectReferencedAssetIds(nodes: TreeNode[]): Set<string> {
     content.content?.forEach(visit)
   }
 
-  for (const node of nodes) {
-    if (node.kind === 'doc' && node.content) visit(node.content)
-  }
+  await Promise.all(
+    nodes
+      .filter((node) => node.kind === 'doc')
+      .map(async (node) => {
+        const content = await loadNodeContent(node.id)
+        visit(content)
+      }),
+  )
 
   return ids
 }
@@ -235,7 +240,7 @@ export function collectReferencedAssetIds(nodes: TreeNode[]): Set<string> {
 export async function sweepUnusedAssets(graceMs = ASSET_GRACE_MS): Promise<SweepResult> {
   return withAssetLock(async () => {
     const [nodes, index] = await Promise.all([loadTree(), loadAssetIndex()])
-    const referenced = collectReferencedAssetIds(nodes ?? [])
+    const referenced = await collectReferencedAssetIds(nodes ?? [])
     const now = Date.now()
     const candidates = index.filter(
       (asset) => !referenced.has(asset.id) && now - asset.lastUsedAt > graceMs,

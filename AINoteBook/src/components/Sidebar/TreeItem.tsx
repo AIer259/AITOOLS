@@ -9,7 +9,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useMemo, useState, type DragEvent as ReactDragEvent } from 'react'
-import { showMoveResult } from '../../lib/moveFeedback'
+import { compareOrder } from '../../lib/fractionalIndex'
+import { showMoveResult } from './moveFeedback'
 import {
   canDragNode,
   canDropOnFolder,
@@ -53,7 +54,10 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
   const draggable = canDragNode(nodes, node)
 
   const children = useMemo(
-    () => nodes.filter((child) => child.parentId === node.id),
+    () =>
+      nodes
+        .filter((child) => child.parentId === node.id)
+        .sort((a, b) => compareOrder(a.order, b.order)),
     [nodes, node.id],
   )
   const hasAttachmentFolder = deleting && Boolean(findAttachmentFolder(nodes, node))

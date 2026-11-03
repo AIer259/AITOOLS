@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 import type { TreeNode } from '../types'
+import { generateKeyBetween } from './fractionalIndex'
 
 const text = (value: string): JSONContent => ({ type: 'text', text: value })
 
@@ -90,68 +91,87 @@ const welcomeContent = doc([
   paragraph(text('所有内容自动保存在本机浏览器，刷新页面不会丢失。左下角可以切换浅色 / 深色主题。')),
 ])
 
-export function createSeedNodes(): TreeNode[] {
-  const now = Date.now()
+export interface SeedData {
+  nodes: TreeNode[]
+  contents: Map<string, JSONContent>
+}
 
-  return [
-    {
-      id: 'seed-guide',
-      area: 'space',
-      parentId: null,
-      kind: 'folder',
-      name: '入门指南',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'seed-welcome',
-      area: 'space',
-      parentId: 'seed-guide',
-      kind: 'doc',
-      name: '欢迎使用 AINoteBook',
-      docType: 'md',
-      content: welcomeContent,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'seed-draft',
-      area: 'space',
-      parentId: null,
-      kind: 'doc',
-      name: '产品需求草稿',
-      docType: 'md',
-      content: doc([
-        heading(2, '产品需求草稿'),
-        paragraph(text('把想法先记下来，再慢慢整理成结构。')),
-        bulletList(['核心目标：写作顺手、查找快速', '下一步：补充导入导出细节', '待确认：是否需要多空间支持']),
-      ]),
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'seed-personal',
-      area: 'private',
-      parentId: null,
-      kind: 'folder',
-      name: '生活记录',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: 'seed-reading',
-      area: 'private',
-      parentId: 'seed-personal',
-      kind: 'doc',
-      name: '本月书单',
-      docType: 'md',
-      content: doc([
-        heading(2, '本月书单'),
-        orderedList(['《深度工作》', '《卡片笔记写作法》', '《设计中的设计》']),
-        paragraph(text('读完一本，就在下面补一条简短笔记。')),
-      ]),
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
+export function createSeedData(): SeedData {
+  const now = Date.now()
+  const firstOrder = generateKeyBetween(null, null)
+  const secondOrder = generateKeyBetween(firstOrder, null)
+
+  const draftContent = doc([
+    heading(2, '产品需求草稿'),
+    paragraph(text('把想法先记下来，再慢慢整理成结构。')),
+    bulletList(['核心目标：写作顺手、查找快速', '下一步：补充导入导出细节', '待确认：是否需要多空间支持']),
+  ])
+  const readingContent = doc([
+    heading(2, '本月书单'),
+    orderedList(['《深度工作》', '《卡片笔记写作法》', '《设计中的设计》']),
+    paragraph(text('读完一本，就在下面补一条简短笔记。')),
+  ])
+
+  return {
+    nodes: [
+      {
+        id: 'seed-guide',
+        area: 'space',
+        parentId: null,
+        kind: 'folder',
+        name: '入门指南',
+        order: firstOrder,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'seed-welcome',
+        area: 'space',
+        parentId: 'seed-guide',
+        kind: 'doc',
+        name: '欢迎使用 AINoteBook',
+        order: firstOrder,
+        docType: 'md',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'seed-draft',
+        area: 'space',
+        parentId: null,
+        kind: 'doc',
+        name: '产品需求草稿',
+        order: secondOrder,
+        docType: 'md',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'seed-personal',
+        area: 'private',
+        parentId: null,
+        kind: 'folder',
+        name: '生活记录',
+        order: firstOrder,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'seed-reading',
+        area: 'private',
+        parentId: 'seed-personal',
+        kind: 'doc',
+        name: '本月书单',
+        order: firstOrder,
+        docType: 'md',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    contents: new Map([
+      ['seed-welcome', welcomeContent],
+      ['seed-draft', draftContent],
+      ['seed-reading', readingContent],
+    ]),
+  }
 }

@@ -1,34 +1,44 @@
 import type { JSONContent } from '@tiptap/core'
 import { create } from 'zustand'
-import { STORAGE_KEYS } from '../lib/constants'
-import { loadTree, removeBlob, saveTree } from '../lib/db'
-import { isAttachmentFolderName } from '../lib/embedRefs'
-import { createSeedNodes } from '../lib/seed'
 import {
-  findAttachmentFolder,
-  findFlatEmbeddedDocs,
+  importDocument as importDocumentUseCase,
+  type ImportDocumentOptions,
+  type ImportKind,
+} from '../application/importDocument'
+import { migrateLegacyTree } from '../application/migrateTree'
+import type { NoteRepository } from '../application/noteRepository'
+import { uploadDocumentFile as uploadDocumentFileUseCase } from '../application/uploadDocument'
+import {
+  type CreateNodeInput,
+  planAttachmentFolder,
+  planCreateNode,
+  planDeleteNode,
+  planEnsureFolder,
+  planMoveNode,
+  planPlaceEmbeddedDoc,
+} from '../domain/noteOps'
+import { STORAGE_KEYS } from '../lib/constants'
+import {
+  createBlobId,
+  loadLegacyTree,
+  loadNodeContent,
+  loadTree,
+  removeBlob,
+  removeNodeContents,
+  saveBlob,
+  saveTreeWithContents,
+} from '../lib/db'
+import { createSeedData } from '../lib/seed'
+import {
   isAttachmentFolder,
-  isEmbeddedNode,
   type MoveOptions,
   type MoveResult,
   type MoveTarget,
 } from '../lib/treeDrag'
-import { findFolder, firstDoc, getDescendantIds } from '../lib/tree'
-import type { Area, DocType, NodeKind, NodeLocation, Theme, TreeNode } from '../types'
+import { firstDoc } from '../lib/tree'
+import type { DocType, NodeLocation, Theme, TreeNode } from '../types'
 
 export type SaveState = 'idle' | 'saving' | 'saved'
-
-interface CreateNodeInput {
-  area: Area
-  parentId: string | null
-  kind: NodeKind
-  name: string
-  docType?: DocType
-  content?: JSONContent
-  blobId?: string
-  activate?: boolean
-  expanded?: boolean
-}
 
 interface NoteStore {
   nodes: TreeNode[]
@@ -40,6 +50,20 @@ interface NoteStore {
   init: () => Promise<void>
   setActive: (id: string | null) => void
   createNode: (input: CreateNodeInput) => string
+  ensureFolder: (location: NodeLocation, name: string) => TreeNode
+  ensureAttachmentFolder: (note: TreeNode) => TreeNode
+  placeEmbeddedDoc: (note: TreeNode, doc: TreeNode) => TreeNode
+  importDocument: (
+    file: File,
+    kind: ImportKind,
+    options?: ImportDocumentOptions,
+  ) => Promise<TreeNode>
+  uploadDocumentFile: (
+    file: File,
+    docType: Exclude<DocType, 'md'>,
+    target?: NodeLocation,
+  ) => Promise<TreeNode>
+  readContent: (id: string) => Promise<JSONContent | undefined>
   moveNodeTo: (id: string, target: MoveTarget, options?: MoveOptions) => MoveResult
   renameNode: (id: string, name: string) => void
   deleteNode: (id: string) => void
@@ -51,6 +75,7 @@ interface NoteStore {
 
 let initPromise: Promise<void> | null = null
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+const pendingContents = new Map<string, JSONContent>()
 
 function makeId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -93,10 +118,42 @@ function queueSave(nodes: TreeNode[], set: (partial: Partial<NoteStore>) => void
   set({ saveState: 'saving' })
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    saveTree(nodes)
+    const contents = new Map(pendingContents)
+    pendingContents.clear()
+    saveTreeWithContents(nodes, contents)
       .then(() => set({ saveState: 'saved' }))
-      .catch(() => set({ saveState: 'idle' }))
+      .catch(() => {
+        for (const [id, content] of contents) pendingContents.set(id, content)
+        set({ saveState: 'idle' })
+      })
   }, 350)
+}
+
+function createRepository(get: () => NoteStore): NoteRepository {
+  return {
+    createNode: (input) => {
+      const id = get().createNode(input)
+      const node = get().nodes.find((item) => item.id === id)
+      if (!node) throw new Error('创建节点失败')
+      return node
+    },
+    findNode: (id) => get().nodes.find((item) => item.id === id),
+    activeLocation: () => {
+      const { activeId, nodes } = get()
+      const active = nodes.find((node) => node.id === activeId)
+      return {
+        area: active?.area ?? 'space',
+        parentId: active ? active.parentId : null,
+      }
+    },
+    ensureFolder: (location, name) => get().ensureFolder(location, name),
+    ensureAttachmentFolder: (note) => get().ensureAttachmentFolder(note),
+    saveBlob: async (data) => {
+      const blobId = createBlobId()
+      await saveBlob(blobId, data)
+      return blobId
+    },
+  }
 }
 
 export const useNoteStore = create<NoteStore>()((set, get) => ({
@@ -114,25 +171,28 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
       let activeId: string | null = null
 
       try {
-        const stored = await loadTree()
-        if (stored && stored.length > 0) {
-          nodes = stored
-          const savedActive = readActiveId()
-          const activeValid = savedActive
-            ? nodes.some((node) => node.id === savedActive && node.kind === 'doc')
-            : false
-          activeId = activeValid ? savedActive : (firstDoc(nodes)?.id ?? null)
-        } else {
-          nodes = createSeedNodes()
-          activeId = firstDoc(nodes)?.id ?? null
-          try {
-            await saveTree(nodes)
-          } catch {
-            // 存储不可用时仍允许本次使用
+        let stored = await loadTree()
+        if (!stored) {
+          const legacy = await loadLegacyTree()
+          if (legacy) {
+            const migrated = migrateLegacyTree(legacy)
+            await saveTreeWithContents(migrated.nodes, migrated.contents)
+            stored = migrated.nodes
+          } else {
+            const seeded = createSeedData()
+            await saveTreeWithContents(seeded.nodes, seeded.contents)
+            stored = seeded.nodes
           }
         }
+
+        nodes = stored
+        const savedActive = readActiveId()
+        const activeValid = savedActive
+          ? nodes.some((node) => node.id === savedActive && node.kind === 'doc')
+          : false
+        activeId = activeValid ? savedActive : (firstDoc(nodes)?.id ?? null)
       } catch {
-        nodes = createSeedNodes()
+        nodes = createSeedData().nodes
         activeId = firstDoc(nodes)?.id ?? null
       }
 
@@ -165,124 +225,74 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     set({ expanded })
   },
 
-  createNode: ({
-    area,
-    parentId,
-    kind,
-    name,
-    docType,
-    content,
-    blobId,
-    activate,
-    expanded: expandedOnCreate,
-  }) => {
-    const fallback = kind === 'doc' ? '未命名文档' : '新建文件夹'
-    const finalName = name.trim() || fallback
-    const id = makeId()
-    const now = Date.now()
-    const finalDocType = docType ?? 'md'
-    const node: TreeNode = {
-      id,
-      area,
-      parentId,
-      kind,
-      name: finalName,
-      createdAt: now,
-      updatedAt: now,
-      ...(kind === 'doc'
-        ? {
-            docType: finalDocType,
-            ...(finalDocType === 'md'
-              ? { content: content ?? { type: 'doc', content: [{ type: 'paragraph' }] } }
-              : {}),
-            ...(blobId ? { blobId } : {}),
-          }
-        : {}),
+  createNode: (input) => {
+    const plan = planCreateNode(get().nodes, get().expanded, input, makeId())
+    if (plan.content) pendingContents.set(plan.node.id, plan.content)
+    set({ nodes: plan.nodes, expanded: plan.expanded })
+    if (input.kind === 'doc' && input.activate !== false) {
+      writeActiveId(plan.node.id)
+      set({ activeId: plan.node.id })
     }
+    queueSave(plan.nodes, set)
+    return plan.node.id
+  },
 
-    const nodes = [...get().nodes, node]
-    const expanded = { ...get().expanded }
-    const parentNode = parentId ? get().nodes.find((item) => item.id === parentId) : undefined
-    if (parentId && !isAttachmentFolderName(parentNode?.name ?? '')) {
-      expanded[parentId] = true
+  ensureFolder: (location, name) => {
+    const plan = planEnsureFolder(get().nodes, get().expanded, location, name, makeId())
+    if (plan.created) {
+      set({ nodes: plan.nodes, expanded: plan.expanded })
+      queueSave(plan.nodes, set)
     }
-    if (kind === 'folder') expanded[id] = expandedOnCreate ?? true
+    return plan.folder
+  },
 
-    set({ nodes, expanded })
-    if (kind === 'doc' && activate !== false) {
-      writeActiveId(id)
-      set({ activeId: id })
+  ensureAttachmentFolder: (note) => {
+    const current = get().nodes.find((node) => node.id === note.id) ?? note
+    const plan = planAttachmentFolder(get().nodes, get().expanded, current, makeId())
+    if (plan.nodes !== get().nodes || plan.expanded !== get().expanded) {
+      set({ nodes: plan.nodes, expanded: plan.expanded })
+      queueSave(plan.nodes, set)
     }
-    queueSave(nodes, set)
-    return id
+    return plan.folder
+  },
+
+  placeEmbeddedDoc: (note, doc) => {
+    const currentNote = get().nodes.find((node) => node.id === note.id) ?? note
+    const currentDoc = get().nodes.find((node) => node.id === doc.id) ?? doc
+    const plan = planPlaceEmbeddedDoc(
+      get().nodes,
+      get().expanded,
+      currentNote,
+      currentDoc,
+      makeId(),
+    )
+    if (plan.nodes !== get().nodes || plan.expanded !== get().expanded) {
+      set({ nodes: plan.nodes, expanded: plan.expanded })
+      queueSave(plan.nodes, set)
+    }
+    return plan.doc
+  },
+
+  importDocument: (file, kind, options) => {
+    return importDocumentUseCase(createRepository(get), file, kind, options)
+  },
+
+  uploadDocumentFile: (file, docType, target) => {
+    return uploadDocumentFileUseCase(createRepository(get), file, docType, target)
+  },
+
+  readContent: async (id) => {
+    const pending = pendingContents.get(id)
+    if (pending) return pending
+    return loadNodeContent(id)
   },
 
   moveNodeTo: (id, target, options) => {
-    const nodes = get().nodes
-    const node = nodes.find((item) => item.id === id)
-    if (!node) return 'invalid'
+    const plan = planMoveNode(get().nodes, get().expanded, id, target, options)
+    if (plan.result !== 'ok') return plan.result
 
-    const targetFolder = target.parentId
-      ? nodes.find((item) => item.id === target.parentId)
-      : undefined
-    if (target.parentId && targetFolder?.kind !== 'folder') return 'invalid'
-    if (isAttachmentFolder(nodes, node) || isEmbeddedNode(nodes, node)) return 'invalid'
-    if (
-      targetFolder &&
-      !options?.allowAttachmentTarget &&
-      (isAttachmentFolder(nodes, targetFolder) || isEmbeddedNode(nodes, targetFolder))
-    ) {
-      return 'invalid'
-    }
-
-    // 根节点集合：普通节点自身；主文档还包括附件文件夹与平级嵌入文档
-    const rootIds = new Set<string>([id])
-    if (node.kind === 'doc') {
-      const attachmentFolder = findAttachmentFolder(nodes, node)
-      if (attachmentFolder) {
-        const conflict = findFolder(
-          nodes,
-          target.area,
-          target.parentId,
-          attachmentFolder.name,
-        )
-        if (conflict && conflict.id !== attachmentFolder.id) return 'conflict'
-        rootIds.add(attachmentFolder.id)
-      }
-
-      for (const embedded of findFlatEmbeddedDocs(nodes, node)) {
-        rootIds.add(embedded.id)
-      }
-    }
-
-    const movingIds = new Set<string>()
-    for (const rootId of rootIds) {
-      for (const movingId of getDescendantIds(nodes, rootId)) movingIds.add(movingId)
-    }
-
-    if (node.kind === 'folder' && target.parentId && movingIds.has(target.parentId)) {
-      return 'invalid'
-    }
-
-    const now = Date.now()
-    const next = nodes.map((item) => {
-      if (!movingIds.has(item.id)) return item
-      const root = rootIds.has(item.id)
-      return {
-        ...item,
-        area: target.area,
-        ...(root ? { parentId: target.parentId } : {}),
-        updatedAt: now,
-      }
-    })
-
-    const expanded = { ...get().expanded }
-    if (target.parentId && !isAttachmentFolderName(targetFolder?.name ?? '')) {
-      expanded[target.parentId] = true
-    }
-
-    set({ nodes: next, expanded })
-    queueSave(next, set)
+    set({ nodes: plan.nodes, expanded: plan.expanded })
+    queueSave(plan.nodes, set)
     return 'ok'
   },
 
@@ -295,47 +305,37 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   },
 
   deleteNode: (id) => {
-    const nodes = get().nodes
-    const target = nodes.find((node) => node.id === id)
-    if (!target) return
+    const plan = planDeleteNode(get().nodes, id)
+    if (!plan) return
 
-    const ids = getDescendantIds(nodes, id)
-
-    // 删除文档时一并删除它的附件文件夹与仍未迁移的平级嵌入文档
-    if (target.kind === 'doc') {
-      const folder = findAttachmentFolder(nodes, target)
-      if (folder) {
-        for (const folderId of getDescendantIds(nodes, folder.id)) ids.add(folderId)
-      }
-
-      for (const doc of findFlatEmbeddedDocs(nodes, target)) {
-        for (const childId of getDescendantIds(nodes, doc.id)) ids.add(childId)
-      }
-    }
-
-    const removed = nodes.filter((node) => ids.has(node.id))
-    const remaining = nodes.filter((node) => !ids.has(node.id))
-
-    for (const node of removed) {
+    const removedDocIds = plan.removed
+      .filter((node) => node.kind === 'doc')
+      .map((node) => node.id)
+    for (const node of plan.removed) {
       if (node.blobId) void removeBlob(node.blobId)
+    }
+    if (removedDocIds.length > 0) {
+      for (const id of removedDocIds) pendingContents.delete(id)
+      void removeNodeContents(removedDocIds)
     }
 
     let activeId = get().activeId
-    if (activeId && ids.has(activeId)) {
-      activeId = firstDoc(remaining)?.id ?? null
+    if (activeId && plan.removedIds.has(activeId)) {
+      activeId = plan.activeIdFallback
       writeActiveId(activeId)
     }
 
     const expanded = { ...get().expanded }
-    for (const removedId of ids) delete expanded[removedId]
+    for (const removedId of plan.removedIds) delete expanded[removedId]
 
-    set({ nodes: remaining, activeId, expanded })
-    queueSave(remaining, set)
+    set({ nodes: plan.remaining, activeId, expanded })
+    queueSave(plan.remaining, set)
   },
 
   updateContent: (id, content) => {
+    pendingContents.set(id, content)
     const nodes = get().nodes.map((node) =>
-      node.id === id ? { ...node, content, updatedAt: Date.now() } : node,
+      node.id === id ? { ...node, updatedAt: Date.now() } : node,
     )
     set({ nodes })
     queueSave(nodes, set)
@@ -360,13 +360,3 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     get().setTheme(get().theme === 'dark' ? 'light' : 'dark')
   },
 }))
-
-/** 当前活动文档所在位置；没有活动文档时回退到空间根目录 */
-export function getActiveLocation(): NodeLocation {
-  const { activeId, nodes } = useNoteStore.getState()
-  const active = nodes.find((node) => node.id === activeId)
-  return {
-    area: active?.area ?? 'space',
-    parentId: active ? active.parentId : null,
-  }
-}

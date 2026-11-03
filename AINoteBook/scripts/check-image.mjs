@@ -5,7 +5,7 @@ import JSZip from 'jszip'
 import puppeteer from 'puppeteer-core'
 
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-const URL = 'http://localhost:5173'
+const URL = process.env.APP_URL || 'http://localhost:5173'
 const shotDir = path.resolve('.tmp-shots')
 const downloadDir = path.resolve('.tmp-downloads')
 fs.mkdirSync(shotDir, { recursive: true })
@@ -149,15 +149,16 @@ const assetState = await page.evaluate(async () => {
   }
 
   const assets = (await readKey('ainb.assets.meta')) ?? []
-  const tree = (await readKey('ainb.tree.v1')) ?? []
+  const tree = (await readKey('ainb.tree.v2')) ?? []
   const note = tree.find((item) => item.name === '图片测试')
+  const content = note ? await readKey(`ainb.node.${note.id}`) : undefined
   const images = []
-  const visit = (content) => {
-    if (!content) return
-    if (content.type === 'noteImage') images.push(content.attrs)
-    content.content?.forEach(visit)
+  const visit = (nodeContent) => {
+    if (!nodeContent) return
+    if (nodeContent.type === 'noteImage') images.push(nodeContent.attrs)
+    nodeContent.content?.forEach(visit)
   }
-  visit(note?.content)
+  visit(content)
 
   return {
     assets: assets.map((asset) => ({

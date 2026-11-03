@@ -31,7 +31,25 @@ npm run dev -- --port 5173
 npm run check
 ```
 
-该命令会执行 TypeScript 类型检查并完成生产构建。
+该命令会执行 TypeScript 类型检查、架构依赖检查并完成生产构建。
+
+## 架构边界
+
+- `src/domain/`：纯领域命令，接收数据、返回结果；不 import store、React、IndexedDB
+- `src/application/`：用例/命令，只依赖 domain、基础设施与 `NoteRepository` 接口；不直接 import Zustand / React
+- `src/lib/`：基础设施与纯工具，不得 import `src/store` 或 `src/components`
+- `src/store/`：Zustand 适配器，负责状态、持久化与用例编排；不得 import `src/components`
+- 新增功能时，领域规则放 `domain/`，流程编排放 `application/`，React 交互与 toast 留在 `components/` / `extensions/`
+
+`npm run check:arch`（已包含在 `npm run check` 中）会扫描 import，发现反向依赖时失败。
+
+## 数据模型约定
+
+- 树元数据存 `ainb.tree.v2`，Markdown 正文只存 `ainb.node.<id>`；不要再给 `TreeNode` 加回 `content`
+- 读取正文使用 `loadNodeContent` 或 store 的 `readContent`（会优先返回尚未落盘的待保存内容）
+- 新节点必须生成 fractional-index `order`；兄弟排序用 `compareOrder`
+- 附件关系使用 `doc.attachmentFolderId` 与 `folder.ownerDocId` 双向关联，不要按名称反查
+- 旧 `ainb.tree.v1` 只用于迁移，不再写入
 
 ## 端到端自测（可选）
 

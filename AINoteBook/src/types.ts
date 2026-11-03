@@ -1,5 +1,3 @@
-import type { JSONContent } from '@tiptap/core'
-
 export type Area = 'space' | 'private'
 export type NodeKind = 'folder' | 'doc'
 export type DocType = 'md' | 'docx' | 'pdf'
@@ -11,9 +9,13 @@ export interface TreeNode {
   parentId: string | null
   kind: NodeKind
   name: string
+  order: string
   docType?: DocType
-  content?: JSONContent
   blobId?: string
+  /** 文档指向自己的附件文件夹 */
+  attachmentFolderId?: string
+  /** 附件文件夹指向所属主文档 */
+  ownerDocId?: string
   createdAt: number
   updatedAt: number
 }

@@ -141,6 +141,7 @@ async function seed(page, nodes, activeId) {
       const docxBytes = Uint8Array.from(atob(docx), (char) => char.charCodeAt(0))
       await new Promise((resolve, reject) => {
         const tx = db.transaction('keyval', 'readwrite')
+        tx.objectStore('keyval').clear()
         tx.objectStore('keyval').put(treeNodes, 'ainb.tree.v1')
         tx.objectStore('keyval').put(pdfBytes.buffer, 'ainb.blob.pdf-embed-fixture')
         tx.objectStore('keyval').put(docxBytes.buffer, 'ainb.blob.docx-embed-fixture')

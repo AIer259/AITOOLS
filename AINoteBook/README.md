@@ -143,7 +143,8 @@ PDF：
 
 ## 数据与隐私
 
-- 文档树与笔记内容：IndexedDB（`ainb.tree.v1`）
+- 文档树元数据：IndexedDB（`ainb.tree.v2`，含 `order`、`attachmentFolderId`、`ownerDocId`）
+- Markdown 正文：IndexedDB（`ainb.node.<id>`，每个文档独立键）
 - PDF / Word 原始文件：IndexedDB（`ainb.blob.*`）
 - 图片资源：IndexedDB（`ainb.assets.meta` 元数据 + `ainb.asset.<sha256>` 二进制）
 - 当前文档、主题：localStorage
@@ -151,9 +152,26 @@ PDF：
 - 启动时尝试申请持久化存储；左下角显示已用容量 / 配额与持久化状态
 - 没有后端、账号与云同步；清除浏览器站点数据会丢失全部笔记与图片，请用导出功能备份
 
+## 数据模型
+
+- `ainb.tree.v2`：树元数据数组；节点含 fractional-index `order`，文档含 `attachmentFolderId`，附件文件夹含 `ownerDocId`
+- `ainb.node.<id>`：Markdown 正文 JSON，按需读取，树保存不再重写全部正文
+- `ainb.blob.<id>`：PDF / Word 原始文件
+- 首次加载会自动把旧 `ainb.tree.v1` 的正文拆分到独立键，并补齐附件显式关系；v1 保留作为迁移备份
+
 ## 技术栈
 
 React 19 · TypeScript · Vite 8 · Tiptap 3（ProseMirror）· lowlight / highlight.js · Zustand · IndexedDB（idb-keyval）· marked · turndown · mammoth · html2canvas · jsPDF · JSZip · lucide-react
+
+## 架构分层
+
+- `domain/`：纯领域命令，接收数据、返回结果，不依赖 store、React、IndexedDB
+- `application/`：用例/命令，依赖 `NoteRepository` 接口，不直接 import Zustand / React
+- `lib/`：IndexedDB、文件解析、导出渲染、图片资源等基础设施与纯工具
+- `store/`：Zustand 适配器，负责状态读写、持久化与用例编排
+- `components/` / `extensions/`：界面与 Tiptap 交互，负责 toast 等 UI 反馈
+
+`npm run check:arch` 会检查依赖方向，禁止 `lib -> store`、`store -> components` 等反向依赖。
 
 ## 项目结构
 
@@ -163,8 +181,10 @@ AITOOLS/
 │  ├─ src/
 │  │  ├─ components/     # 侧栏、编辑器、目录、通用弹窗
 │  │  ├─ extensions/     # Tiptap 节点与插件（表格、着重块、代码块、图片、嵌入）
-│  │  ├─ lib/            # 存储、导入导出、资源、工具函数
-│  │  ├─ store/          # Zustand 笔记与 UI 状态
+│  │  ├─ domain/         # 纯领域命令：树操作、附件规划
+│  │  ├─ application/    # 用例：导入、上传、NoteRepository 接口
+│  │  ├─ lib/            # 基础设施：存储、解析、导出、资源
+│  │  ├─ store/          # Zustand 适配器与 UI 状态
 │  │  ├─ styles/         # 全局与编辑器样式
 │  │  └─ types/          # 类型声明
 │  ├─ scripts/           # Puppeteer 端到端自测
@@ -190,7 +210,8 @@ AITOOLS/
 | `npm run build` | TypeScript 类型检查 + 生产构建 |
 | `npm run build:pages` | 以 `/AITOOLS/AINoteBook/` 为 base 构建 GitHub Pages 版本 |
 | `npm run typecheck` | 仅执行 TypeScript 类型检查 |
-| `npm run check` | CI 使用的类型检查 + 构建 |
+| `npm run check:arch` | 检查 domain/application/lib/store 的依赖方向 |
+| `npm run check` | CI 使用的类型检查 + 架构守卫 + 构建 |
 | `npm run preview` | 预览生产构建 |
 
 ## 端到端自测
@@ -233,6 +254,7 @@ node scripts/check-update.mjs
 - PDF 预览依赖浏览器内置 PDF 阅读器（推荐 Chrome / Edge）。
 - 嵌入文档会随 Markdown ZIP 一起导出/导入；单文件 Markdown 与 PDF 中仍显示为说明卡片，不会展开完整内容。
 - 附件文件夹名按嵌入时的主文件名生成，之后重命名主笔记不会自动改名。
+- 同名主文档仍可能共用同一个附件文件夹；`ownerDocId` 只能指向其中一个主文档。
 - 直接下载的 PDF 为图片型，文字不可检索；分页会避开文字行、表格行、图片与代码块边界，部分页面底部可能留白。
 - 自动链接只识别以 `http://`、`https://` 或 `www.` 开头的明确网址；裸域名（如 `example.com`）不会自动链接，避免文件名被误判。
 - 线上版与本地开发版的浏览器存储按源隔离，笔记不互通；迁移请使用 Markdown / ZIP 导出与导入。

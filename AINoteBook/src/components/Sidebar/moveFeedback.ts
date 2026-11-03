@@ -1,5 +1,5 @@
-import { useUiStore } from '../store/useUiStore'
-import type { MoveResult } from './treeDrag'
+import type { MoveResult } from '../../lib/treeDrag'
+import { useUiStore } from '../../store/useUiStore'
 
 export function showMoveResult(result: MoveResult): void {
   if (result === 'conflict') {

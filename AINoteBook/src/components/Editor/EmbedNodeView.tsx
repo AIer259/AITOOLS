@@ -1,3 +1,4 @@
+import type { JSONContent } from '@tiptap/core'
 import { ChevronRight, Trash2 } from 'lucide-react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
@@ -11,21 +12,22 @@ import { DocTypeIcon } from '../common/DocTypeIcon'
 export function EmbedNodeView(props: NodeViewProps) {
   const docId = String(props.node.attrs.docId ?? '')
   const node = useNoteStore((state) => state.nodes.find((item) => item.id === docId))
+  const readContent = useNoteStore((state) => state.readContent)
 
   const [expanded, setExpanded] = useState(false)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [docxHtml, setDocxHtml] = useState<string | null>(null)
+  const [content, setContent] = useState<JSONContent | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const mdRef = useRef<HTMLDivElement>(null)
 
   const docType = (node?.docType ?? props.node.attrs.docType ?? 'md') as DocType
   const name = node?.name || String(props.node.attrs.name || '嵌入文档')
-  const content = node?.content
   const blobId = node?.blobId
 
   const mdHtml = useMemo(
-    () => (expanded && docType === 'md' ? docJsonToHtml(content) : ''),
+    () => (expanded && docType === 'md' ? docJsonToHtml(content ?? undefined) : ''),
     [expanded, docType, content],
   )
 
@@ -33,8 +35,37 @@ export function EmbedNodeView(props: NodeViewProps) {
     setExpanded(false)
     setPdfUrl(null)
     setDocxHtml(null)
+    setContent(null)
     setError(null)
   }, [docId])
+
+  useEffect(() => {
+    if (!expanded || docType !== 'md' || !docId) {
+      setContent(null)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    setContent(null)
+
+    readContent(docId)
+      .then((next) => {
+        if (!cancelled) setContent(next ?? null)
+      })
+      .catch((loadError) => {
+        console.error(loadError)
+        if (!cancelled) setError('文档加载失败')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [expanded, docType, docId, readContent])
 
   useEffect(() => {
     if (!expanded || !mdHtml || !mdRef.current) return

@@ -138,6 +138,7 @@ try {
     })
     await new Promise((resolve, reject) => {
       const tx = db.transaction('keyval', 'readwrite')
+      tx.objectStore('keyval').clear()
       tx.objectStore('keyval').put(nodes, 'ainb.tree.v1')
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
