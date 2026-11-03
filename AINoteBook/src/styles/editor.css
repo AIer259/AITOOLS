@@ -1236,40 +1236,43 @@ body.is-col-resizing * {
   inset: 0;
   z-index: 300;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.8);
+  padding: 0;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.9);
   cursor: zoom-out;
 }
 
 .image-lightbox img {
-  max-width: 94vw;
-  max-height: 92vh;
-  border-radius: 8px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-  object-fit: contain;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: auto;
+  border-radius: 0;
+  box-shadow: none;
   cursor: default;
 }
 
 .image-lightbox-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 36px;
-  height: 36px;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
   display: grid;
   place-items: center;
   cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .image-lightbox-close:hover {
-  background: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 /* ---------- 搜索高亮（阶段四使用） ---------- */

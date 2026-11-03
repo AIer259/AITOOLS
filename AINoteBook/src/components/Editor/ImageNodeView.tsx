@@ -133,12 +133,13 @@ export function ImageNodeView(props: NodeViewProps) {
               type="button"
               className="image-lightbox-close"
               title="关闭"
+              aria-label="关闭图片预览"
               onClick={(event) => {
                 event.stopPropagation()
                 setLightboxOpen(false)
               }}
             >
-              <X size={20} />
+              <X size={16} />
             </button>
             <img
               src={url}
