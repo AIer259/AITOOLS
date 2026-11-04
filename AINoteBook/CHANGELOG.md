@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.22.0] - 2026-11-05
 
 ### Added
 
@@ -22,6 +22,7 @@
 - 新增 `scripts/check-asset-refs.mjs`，覆盖输入不写树、引用键生成、索引重建、回收站引用保护与永久删除后的图片清理。
 - 新增 `scripts/check-stream-export.mjs`，覆盖 FSA 主路径、取消选择、OPFS 回退、Blob 回退、临时文件清理与流式恢复。
 - 新增 `scripts/check-global-search.mjs`，覆盖共用索引构建、中文/英文跨文档命中、路径与片段、回收站排除、结果跳转高亮与增量索引。
+- 新增 `scripts/check-sidebar-search.mjs`，覆盖侧栏搜索入口的位置、点击打开与关闭。
 - `check-backup.mjs` 增加导出读取次数与 ZIP 压缩方法断言。
 
 ## [0.21.0] - 2026-11-04
