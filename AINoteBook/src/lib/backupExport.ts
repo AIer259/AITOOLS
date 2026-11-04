@@ -1,9 +1,11 @@
 import type { JSONContent } from '@tiptap/core'
+import type JSZip from 'jszip'
 import { DOC_TYPE_META, type Area, type TreeNode } from '../types'
 import { loadBlob, loadNodeContent } from './db'
 import { collectEmbeddedDocIds } from './embedRefs'
 import {
   buildMarkdownFromHtml,
+  createExportAssetCache,
   hydrateImagesForExport,
   safeFileName,
   safeFolderName,
@@ -24,14 +26,18 @@ export interface BackupArchiveContext {
   readContent?: (id: string) => Promise<JSONContent | undefined>
 }
 
-export interface BackupArchiveResult {
-  blob: Blob
+export interface BackupArchivePlan {
+  zip: JSZip
   filename: string
   docCount: number
   folderCount: number
   imageCount: number
   fileCount: number
   warnings: string[]
+}
+
+export interface BackupArchiveResult extends Omit<BackupArchivePlan, 'zip'> {
+  blob: Blob
 }
 
 interface PlannedTree {
@@ -136,14 +142,19 @@ function stamp(date: Date): string {
   )}${pad(date.getMinutes())}`
 }
 
-export async function createBackupArchive(
+export function backupFileName(date = new Date()): string {
+  return `AINoteBook-backup-${stamp(date)}.zip`
+}
+
+export async function buildBackupZip(
   context: BackupArchiveContext,
-): Promise<BackupArchiveResult> {
+): Promise<BackupArchivePlan> {
   const index = getTreeIndex(context.nodes)
   const { paths, ordered } = planPaths(index)
   const JSZip = (await import('jszip')).default
   const zip = new JSZip()
   const readContent = context.readContent ?? loadNodeContent
+  const assetCache = await createExportAssetCache()
 
   const images = new Map<string, ExportImage>()
   const warnings: string[] = []
@@ -178,7 +189,7 @@ export async function createBackupArchive(
         continue
       }
 
-      zip.file(path, buffer)
+      zip.file(path, buffer, { compression: 'STORE' })
       writtenBlobs.add(node.id)
       continue
     }
@@ -203,6 +214,7 @@ export async function createBackupArchive(
           const assetPath = `assets/${assetId}.${extensionForMime(mime)}`
           return { src: relativePath(docDir, assetPath), path: assetPath }
         },
+        assetCache,
       },
     )
 
@@ -215,7 +227,7 @@ export async function createBackupArchive(
   }
 
   for (const image of images.values()) {
-    zip.file(image.path, image.blob)
+    zip.file(image.path, image.blob, { compression: 'STORE' })
   }
 
   const manifestNodes: ManifestNode[] = ordered.map((node) => {
@@ -270,19 +282,27 @@ export async function createBackupArchive(
 
   zip.file('manifest.json', JSON.stringify(manifest, null, 2))
 
-  const blob = await zip.generateAsync({
-    type: 'blob',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 6 },
-  })
-
   return {
-    blob,
-    filename: `AINoteBook-backup-${stamp(new Date())}.zip`,
+    zip,
+    filename: backupFileName(),
     docCount,
     folderCount,
     imageCount: images.size,
     fileCount,
     warnings,
   }
+}
+
+/** 现有导出方式：在内存生成完整 ZIP 后下载 */
+export async function createBackupArchive(
+  context: BackupArchiveContext,
+): Promise<BackupArchiveResult> {
+  const { zip, ...meta } = await buildBackupZip(context)
+  const blob = await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  })
+
+  return { blob, ...meta }
 }

@@ -194,9 +194,10 @@ async function deleteFromSidebar(name) {
 async function openTrash() {
   await evaluate(`document.querySelector('.sidebar-trash').click()`)
   await waitFor(`Boolean(document.querySelector('.trash-view'))`)
-  assert.ok(
-    await evaluate(`document.querySelector('.backup-menu-button')?.offsetParent !== null`),
-    '回收站视图应保留顶栏备份菜单',
+  assert.equal(
+    await evaluate(`document.querySelector('.backup-menu-button')?.offsetParent === null`),
+    true,
+    '回收站视图不应显示顶栏备份按钮',
   )
 }
 

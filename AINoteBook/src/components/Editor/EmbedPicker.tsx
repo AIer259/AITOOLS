@@ -1,11 +1,11 @@
 import { Search, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertDocumentEmbed } from '../../lib/documentFiles'
-import { getPath } from '../../lib/tree'
+import { formatNodePath } from '../../lib/tree'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useTreeIndex } from '../../store/useTreeIndex'
 import { useUiStore } from '../../store/useUiStore'
-import { AREA_LABEL, DOC_TYPE_LABEL, type DocType, type TreeNode } from '../../types'
+import { DOC_TYPE_LABEL, type DocType, type TreeNode } from '../../types'
 import { DocTypeIcon } from '../common/DocTypeIcon'
 
 const UPLOAD_TYPES = [
@@ -121,10 +121,7 @@ export function EmbedPicker() {
     }
   }
 
-  const pathLabel = (doc: TreeNode) => {
-    const parents = getPath(index, doc.id).slice(0, -1)
-    return [AREA_LABEL[doc.area], ...parents.map((node) => node.name)].join(' / ')
-  }
+  const pathLabel = (doc: TreeNode) => formatNodePath(index, doc)
 
   return (
     <div className="dialog-backdrop" onMouseDown={closePicker}>

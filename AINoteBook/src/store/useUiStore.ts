@@ -17,8 +17,11 @@ export interface ToastItem {
 
 interface UiStore {
   editor: Editor | null
+  contentReadyId: string | null
   tocOpen: boolean
   searchOpen: boolean
+  globalSearchOpen: boolean
+  pendingSearch: { docId: string; query: string } | null
   embedPickerOpen: boolean
   embedInsertPos: number | null
   storageInfo: StorageInfo | null
@@ -26,10 +29,15 @@ interface UiStore {
   sidebarOpen: boolean
   sidebarWidth: number
   setEditor: (editor: Editor | null) => void
+  setContentReadyId: (id: string | null) => void
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
   toggleToc: () => void
   setSearchOpen: (open: boolean) => void
+  openGlobalSearch: () => void
+  closeGlobalSearch: () => void
+  requestSearch: (docId: string, query: string) => void
+  clearPendingSearch: () => void
   openEmbedPicker: (pos: number) => void
   closeEmbedPicker: () => void
   refreshStorage: () => Promise<void>
@@ -42,8 +50,11 @@ const initialSidebar = readSidebarLayout()
 
 export const useUiStore = create<UiStore>()((set) => ({
   editor: null,
+  contentReadyId: null,
   tocOpen: false,
   searchOpen: false,
+  globalSearchOpen: false,
+  pendingSearch: null,
   embedPickerOpen: false,
   embedInsertPos: null,
   storageInfo: null,
@@ -52,6 +63,8 @@ export const useUiStore = create<UiStore>()((set) => ({
   sidebarWidth: initialSidebar.width,
 
   setEditor: (editor) => set({ editor }),
+
+  setContentReadyId: (id) => set({ contentReadyId: id }),
 
   toggleSidebar: () =>
     set((state) => {
@@ -70,6 +83,19 @@ export const useUiStore = create<UiStore>()((set) => ({
   toggleToc: () => set((state) => ({ tocOpen: !state.tocOpen })),
 
   setSearchOpen: (open) => set({ searchOpen: open }),
+
+  openGlobalSearch: () => set({ globalSearchOpen: true, searchOpen: false }),
+
+  closeGlobalSearch: () => set({ globalSearchOpen: false }),
+
+  requestSearch: (docId, query) =>
+    set({
+      globalSearchOpen: false,
+      searchOpen: true,
+      pendingSearch: { docId, query },
+    }),
+
+  clearPendingSearch: () => set({ pendingSearch: null }),
 
   openEmbedPicker: (pos) => set({ embedPickerOpen: true, embedInsertPos: pos }),
 

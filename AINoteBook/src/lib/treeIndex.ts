@@ -3,6 +3,13 @@ import { compareOrder } from './fractionalIndex'
 
 const AREAS: Area[] = ['space', 'private']
 
+/** 有正文 JSON 的 Markdown 文档 id；图片引用与搜索索引共用同一范围 */
+export function contentDocIds(nodes: readonly TreeNode[]): string[] {
+  return nodes
+    .filter((node) => node.kind === 'doc' && (node.docType ?? 'md') === 'md')
+    .map((node) => node.id)
+}
+
 /**
  * 从扁平节点数组派生的只读索引。
  * 只在 nodes 引用变化时重建；索引本身不持久化，也不被修改。

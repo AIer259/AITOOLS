@@ -2,6 +2,28 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 顶栏备份菜单新增「流式导出全部笔记」：优先用 File System Access 直接写入所选文件，失败时回退 OPFS 暂存下载或内存 Blob 下载；现有「导出全部笔记」保持不变。
+- 备份菜单新增「流式从备份恢复」：读取 ZIP 中央目录后按条目流式解压，不再整包载入内存；不支持流式解压时自动回退现有「从备份恢复」。
+- 全局搜索：`Ctrl/Cmd+K` 打开居中弹窗，按标题与正文检索全部活动笔记，显示路径与命中片段；点击结果打开文档并跳到第一处。侧栏产品图标下方新增「搜索全部笔记」按钮，与快捷键等效。
+- 搜索索引与图片引用索引共用首次正文扫描，一次建立 `ainb.search.<id>` 与 `ainb.assetRef.<id>`，编辑时增量更新。
+
+### Changed
+
+- 正文输入只保存正文与图片引用，不再在每次防抖保存时重写整棵树。
+- 图片清理改用 `ainb.assetRef.<docId>` 引用索引，启动时不再读取全部文档正文；索引缺失时按批重建，回收站中的文档仍计为引用。
+- Markdown ZIP 与全量备份导出时只读取一次资源索引，同一图片 Blob 在多篇文档间复用；图片、PDF / Word 原始文件改用 STORE 压缩，Markdown 与 JSON 保持 DEFLATE。
+
+### Tests
+
+- 新增 `scripts/check-asset-refs.mjs`，覆盖输入不写树、引用键生成、索引重建、回收站引用保护与永久删除后的图片清理。
+- 新增 `scripts/check-stream-export.mjs`，覆盖 FSA 主路径、取消选择、OPFS 回退、Blob 回退、临时文件清理与流式恢复。
+- 新增 `scripts/check-global-search.mjs`，覆盖共用索引构建、中文/英文跨文档命中、路径与片段、回收站排除、结果跳转高亮与增量索引。
+- `check-backup.mjs` 增加导出读取次数与 ZIP 压缩方法断言。
+
 ## [0.21.0] - 2026-11-04
 
 ### Added

@@ -274,13 +274,21 @@ assert.ok(attachmentMarkdown.includes('嵌入 Markdown 内容可见'), '附件 M
     await page.goto(APP_URL, { waitUntil: 'networkidle0' })
     await page.waitForSelector('.paper')
 
-    const zipInput = await page.$('input[accept*=".zip"]')
+    const zipInput = await page.$('.topbar-actions > input[accept*=".zip"]')
     assert.ok(zipInput, '未找到 ZIP 导入输入框')
     await zipInput.uploadFile(exportedZipPath)
-    await page.waitForFunction(
-      () => document.querySelector('.note-title')?.value === '嵌入导出测试',
-      { timeout: 30000 },
-    )
+    try {
+      await page.waitForFunction(
+        () => document.querySelector('.note-title')?.value === '嵌入导出测试',
+        { timeout: 30000 },
+      )
+    } catch (error) {
+      const toast = await page.evaluate(
+        () => document.querySelector('.toast')?.textContent ?? '',
+      )
+      console.error('ZIP 导入失败，toast:', toast, 'errors:', errors)
+      throw error
+    }
 
     await page.waitForFunction(() => document.querySelectorAll('.embed-node').length === 3)
     await page.waitForFunction(

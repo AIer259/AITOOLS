@@ -278,11 +278,17 @@ const mainContent = {
 }
 const embedContent = {
   type: 'doc',
-  content: [{ type: 'paragraph', content: [{ type: 'text', text: '嵌入正文' }] }],
+  content: [
+    { type: 'paragraph', content: [{ type: 'text', text: '嵌入正文' }] },
+    { type: 'noteImage', attrs: { assetId: 'asset-1', alt: '测试图', path: '' } },
+  ],
 }
 const privateContent = {
   type: 'doc',
-  content: [{ type: 'paragraph', content: [{ type: 'text', text: '私人正文' }] }],
+  content: [
+    { type: 'paragraph', content: [{ type: 'text', text: '私人正文' }] },
+    { type: 'noteImage', attrs: { assetId: 'asset-1', alt: '测试图', path: '' } },
+  ],
 }
 const assetMeta = [
   {
@@ -298,6 +304,14 @@ const assetMeta = [
 
 await send('Page.enable')
 await send('Runtime.enable')
+await send('Page.addScriptToEvaluateOnNewDocument', {
+  source: `window.__idbReads = []
+    const originalGet = IDBObjectStore.prototype.get
+    IDBObjectStore.prototype.get = function (key) {
+      try { window.__idbReads.push(String(key)) } catch (error) {}
+      return originalGet.apply(this, arguments)
+    }`,
+})
 await send('DOM.enable')
 await send('Emulation.setDeviceMetricsOverride', {
   width: 1440,
@@ -441,8 +455,15 @@ await evaluate(`localStorage.removeItem('ainb.backup.v1')`)
 await reloadPage()
 await waitFor(`Boolean(document.querySelector('.backup-banner'))`)
 
+// 等编辑器图片加载完，避免把 UI 读取资源索引计入导出
+await waitFor(
+  `Boolean(document.querySelector('.note-image-img'))
+    && [...document.querySelectorAll('.note-image-img')].every((img) => img.complete)`,
+)
+await evaluate(`window.__idbReads = []`)
 await clickPrimaryBackup()
 const zipPath = await waitForZip()
+const exportReads = await evaluate(`window.__idbReads`)
 await waitFor(`!document.querySelector('.backup-banner')`)
 const backupRecord = await evaluate(
   `JSON.parse(localStorage.getItem('ainb.backup.v1') ?? '{}')`,
@@ -465,6 +486,29 @@ for (const entry of [
 ]) {
   assert.ok(names.includes(entry), `ZIP 缺少 ${entry}`)
 }
+
+const countReads = (key) => exportReads.filter((item) => item === key).length
+assert.equal(
+  countReads('ainb.assets.meta'),
+  1,
+  `导出应只读一次资源索引：${countReads('ainb.assets.meta')}`,
+)
+assert.equal(
+  countReads('ainb.asset.asset-1'),
+  1,
+  `同一图片应只读一次 Blob：${countReads('ainb.asset.asset-1')}`,
+)
+
+const compressionOf = (name) => {
+  const magic = zip.files[name]?._data?.compression?.magic
+  if (magic === '\x00\x00') return 'STORE'
+  if (magic === '\x08\x00') return 'DEFLATE'
+  return 'UNKNOWN'
+}
+assert.equal(compressionOf('assets/asset-1.png'), 'STORE', '图片应使用 STORE 压缩')
+assert.equal(compressionOf('notes/空间/资料/主文档附件/说明.pdf'), 'STORE', 'PDF 应使用 STORE 压缩')
+assert.equal(compressionOf('notes/空间/资料/主文档.md'), 'DEFLATE', 'Markdown 应使用 DEFLATE')
+assert.equal(compressionOf('manifest.json'), 'DEFLATE', 'manifest 应使用 DEFLATE')
 
 const manifest = JSON.parse(await zip.file('manifest.json').async('string'))
 assert.equal(manifest.format, 'ainoteBook-backup')

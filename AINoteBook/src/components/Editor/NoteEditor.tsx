@@ -31,6 +31,7 @@ export function NoteEditor({ node }: NoteEditorProps) {
   const updateContent = useNoteStore((state) => state.updateContent)
   const readContent = useNoteStore((state) => state.readContent)
   const setEditor = useUiStore((state) => state.setEditor)
+  const setContentReadyId = useUiStore((state) => state.setContentReadyId)
   const [contentReady, setContentReady] = useState(false)
 
   const editor = useEditor({
@@ -50,24 +51,28 @@ export function NoteEditor({ node }: NoteEditorProps) {
   useEffect(() => {
     let cancelled = false
     setContentReady(false)
+    setContentReadyId(null)
 
     readContent(node.id)
       .then((content) => {
         if (cancelled) return
         editor?.commands.setContent(content ?? EMPTY_DOC, { emitUpdate: false })
         setContentReady(true)
+        setContentReadyId(node.id)
       })
       .catch((error) => {
         console.error('加载笔记内容失败', error)
         if (cancelled) return
         editor?.commands.setContent(EMPTY_DOC, { emitUpdate: false })
         setContentReady(true)
+        setContentReadyId(node.id)
       })
 
     return () => {
       cancelled = true
+      setContentReadyId(null)
     }
-  }, [node.id, editor, readContent])
+  }, [node.id, editor, readContent, setContentReadyId])
 
   useEffect(() => {
     if (!contentReady) return

@@ -132,6 +132,7 @@ await page.waitForSelector('.dialog input')
 await fillDialog('测试文档')
 await clickIn('.dialog-actions button', '创建')
 await page.waitForFunction(() => document.querySelector('.note-title')?.value === '测试文档')
+await page.waitForSelector('.note-prose')
 
 // 7. 编辑正文与 Markdown 标题快捷输入
 await page.click('.note-prose')
@@ -174,11 +175,13 @@ results.folderDeleted = true
 // 10. 新建根文档 -> 输入内容 -> 刷新验证持久化
 await createNodeFromSection(1, '新建文档', '持久化测试')
 await page.waitForFunction(() => document.querySelector('.note-title')?.value === '持久化测试')
+await page.waitForSelector('.note-prose')
 await page.click('.note-prose')
 await page.keyboard.sendCharacter('刷新后应保留这段内容')
 await new Promise((resolve) => setTimeout(resolve, 900))
 await page.reload({ waitUntil: 'networkidle0' })
 await waitRows()
+await page.waitForSelector('.note-prose')
 results.persistedTitle = await page.$eval('.note-title', (el) => el.value)
 results.persistedBody = await page.$eval('.note-prose', (el) => el.textContent)
 assert.equal(results.persistedTitle, '持久化测试')

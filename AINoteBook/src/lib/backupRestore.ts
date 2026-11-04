@@ -5,6 +5,11 @@ import { safeFolderName } from './fileExport'
 import { nextOrder } from './fractionalIndex'
 import { restoreImageAsset, type AssetMeta } from './imageAssets'
 import { getTreeIndex } from './treeIndex'
+import {
+  openStreamingZip,
+  StreamingUnsupportedError,
+  type StreamingZipReader,
+} from './zipReader'
 
 interface ManifestNode {
   id: string
@@ -68,6 +73,8 @@ export interface RestoreBackupResult {
   warnings: string[]
 }
 
+type BackupReader = Pick<StreamingZipReader, 'readText' | 'readBlob'>
+
 async function openZip(file: File) {
   const JSZip = (await import('jszip')).default
   return JSZip.loadAsync(await file.arrayBuffer())
@@ -75,22 +82,28 @@ async function openZip(file: File) {
 
 type ZipArchive = Awaited<ReturnType<typeof openZip>>
 
-async function loadArchive(
-  file: File,
-): Promise<{ zip: ZipArchive; manifest: BackupManifest }> {
-  let zip: ZipArchive
-  try {
-    zip = await openZip(file)
-  } catch {
-    throw new Error('无法读取备份文件，请确认是完整的 ZIP')
+function zipReader(zip: ZipArchive): BackupReader {
+  return {
+    readText: async (path) => {
+      const entry = zip.file(path)
+      return entry ? entry.async('string') : undefined
+    },
+    readBlob: async (path) => {
+      const entry = zip.file(path)
+      return entry ? entry.async('blob') : undefined
+    },
   }
+}
 
-  const entry = zip.file('manifest.json')
-  if (!entry) throw new Error('不是有效的 AINoteBook 备份：缺少 manifest.json')
+async function readManifest(reader: BackupReader): Promise<BackupManifest> {
+  const text = await reader.readText('manifest.json')
+  if (text === undefined) {
+    throw new Error('不是有效的 AINoteBook 备份：缺少 manifest.json')
+  }
 
   let raw: unknown
   try {
-    raw = JSON.parse(await entry.async('string'))
+    raw = JSON.parse(text)
   } catch {
     throw new Error('备份 manifest.json 已损坏')
   }
@@ -108,7 +121,37 @@ async function loadArchive(
     throw new Error('备份格式版本不受支持')
   }
 
-  return { zip, manifest: manifest as BackupManifest }
+  return manifest as BackupManifest
+}
+
+async function loadArchive(
+  file: File,
+): Promise<{ reader: BackupReader; manifest: BackupManifest }> {
+  let zip: ZipArchive
+  try {
+    zip = await openZip(file)
+  } catch {
+    throw new Error('无法读取备份文件，请确认是完整的 ZIP')
+  }
+
+  const reader = zipReader(zip)
+  return { reader, manifest: await readManifest(reader) }
+}
+
+async function openArchive(
+  file: File,
+  streaming: boolean,
+): Promise<{ reader: BackupReader; manifest: BackupManifest }> {
+  if (streaming) {
+    try {
+      const reader = await openStreamingZip(file)
+      return { reader, manifest: await readManifest(reader) }
+    } catch (error) {
+      if (!(error instanceof StreamingUnsupportedError)) throw error
+    }
+  }
+
+  return loadArchive(file)
 }
 
 function normalizeArea(value: string | undefined): Area {
@@ -156,8 +199,7 @@ function remapEmbedIds(
   content.content?.forEach((child) => remapEmbedIds(child, idMap, warnings))
 }
 
-export async function readBackupSummary(file: File): Promise<BackupArchiveSummary> {
-  const { manifest } = await loadArchive(file)
+function summarizeManifest(manifest: BackupManifest): BackupArchiveSummary {
   const nodes = manifest.nodes.filter((node) => node && typeof node.id === 'string')
   const docs = nodes.filter((node) => node.kind !== 'folder')
   const folders = nodes.filter((node) => node.kind === 'folder')
@@ -177,11 +219,41 @@ export async function readBackupSummary(file: File): Promise<BackupArchiveSummar
   }
 }
 
+export async function readBackupSummary(file: File): Promise<BackupArchiveSummary> {
+  const { manifest } = await loadArchive(file)
+  return summarizeManifest(manifest)
+}
+
+/** 只读中央目录与 manifest；不支持流式解压时退回 JSZip */
+export async function readBackupSummaryStreaming(
+  file: File,
+): Promise<BackupArchiveSummary> {
+  const { manifest } = await openArchive(file, true)
+  return summarizeManifest(manifest)
+}
+
 export async function restoreBackupArchive(
   file: File,
   currentNodes: readonly TreeNode[],
 ): Promise<RestoreBackupResult> {
-  const { zip, manifest } = await loadArchive(file)
+  const { reader, manifest } = await openArchive(file, false)
+  return restoreFromReader(reader, manifest, currentNodes)
+}
+
+/** 按条目流式读取；不支持流式解压时退回 JSZip */
+export async function restoreBackupArchiveStreaming(
+  file: File,
+  currentNodes: readonly TreeNode[],
+): Promise<RestoreBackupResult> {
+  const { reader, manifest } = await openArchive(file, true)
+  return restoreFromReader(reader, manifest, currentNodes)
+}
+
+async function restoreFromReader(
+  reader: BackupReader,
+  manifest: BackupManifest,
+  currentNodes: readonly TreeNode[],
+): Promise<RestoreBackupResult> {
   const now = Date.now()
   const warnings = Array.isArray(manifest.warnings) ? [...manifest.warnings] : []
   const currentIndex = getTreeIndex(currentNodes)
@@ -279,10 +351,12 @@ export async function restoreBackupArchive(
 
       if (docType === 'md') {
         let content: JSONContent = { type: 'doc', content: [] }
-        const entry = source.contentPath ? zip.file(source.contentPath) : null
-        if (entry) {
+        const text = source.contentPath
+          ? await reader.readText(source.contentPath)
+          : undefined
+        if (text !== undefined) {
           try {
-            content = JSON.parse(await entry.async('string')) as JSONContent
+            content = JSON.parse(text) as JSONContent
             remapEmbedIds(content, idMap, warnings)
           } catch {
             warnings.push(`「${node.name}」正文 JSON 损坏，已按空文档恢复`)
@@ -293,9 +367,11 @@ export async function restoreBackupArchive(
         contents.set(id, content)
       } else {
         fileCount += 1
-        const entry = source.blobPath ? zip.file(source.blobPath) : null
-        if (entry) {
-          const buffer = await entry.async('arraybuffer')
+        const blob = source.blobPath
+          ? await reader.readBlob(source.blobPath)
+          : undefined
+        if (blob) {
+          const buffer = await blob.arrayBuffer()
           const blobId = createBlobId()
           await saveBlob(blobId, buffer)
           node.blobId = blobId
@@ -314,13 +390,12 @@ export async function restoreBackupArchive(
       continue
     }
 
-    const entry = zip.file(asset.path)
-    if (!entry) {
+    const blob = await reader.readBlob(asset.path)
+    if (!blob) {
       warnings.push(`图片 ${asset.id} 缺少文件`)
       continue
     }
 
-    const buffer = await entry.async('arraybuffer')
     const mime = asset.mime || 'image/png'
     const meta: AssetMeta = {
       id: asset.id,
@@ -331,7 +406,7 @@ export async function restoreBackupArchive(
       createdAt: now,
       lastUsedAt: now,
     }
-    await restoreImageAsset(meta, new Blob([buffer], { type: mime }))
+    await restoreImageAsset(meta, new Blob([blob], { type: mime }))
     imageCount += 1
   }
 

@@ -29,8 +29,14 @@ import {
   removeBlob,
   removeNodeContents,
   saveBlob,
+  saveNodeContents,
   saveTreeWithContents,
 } from '../lib/db'
+import {
+  invalidateSearchCache,
+  removeSearchCache,
+  updateSearchCache,
+} from '../lib/searchIndex'
 import { createSeedData } from '../lib/seed'
 import { firstDoc } from '../lib/tree'
 import { getTreeIndex } from '../lib/treeIndex'
@@ -89,6 +95,7 @@ interface NoteStore {
 
 let initPromise: Promise<void> | null = null
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let pendingTree: TreeNode[] | null = null
 const pendingContents = new Map<string, JSONContent>()
 
 function makeId(): string {
@@ -128,20 +135,46 @@ function writeActiveId(id: string | null): void {
   }
 }
 
-function queueSave(nodes: TreeNode[], set: (partial: Partial<NoteStore>) => void): void {
+function scheduleSave(set: (partial: Partial<NoteStore>) => void): void {
   set({ saveState: 'saving' })
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     saveTimer = null
-    const contents = new Map(pendingContents)
-    pendingContents.clear()
-    saveTreeWithContents(nodes, contents)
-      .then(() => set({ saveState: 'saved' }))
-      .catch(() => {
-        for (const [id, content] of contents) pendingContents.set(id, content)
-        set({ saveState: 'idle' })
-      })
+    void flushSaveQueue(set)
   }, 350)
+}
+
+async function flushSaveQueue(
+  set: (partial: Partial<NoteStore>) => void,
+  rethrow = false,
+): Promise<void> {
+  const contents = new Map(pendingContents)
+  const tree = pendingTree
+  pendingContents.clear()
+  pendingTree = null
+
+  try {
+    // 只有结构变化才写整棵树；纯输入只写正文与图片引用
+    const searchRecords = tree
+      ? await saveTreeWithContents(tree, contents)
+      : await saveNodeContents(contents)
+    updateSearchCache(searchRecords)
+    // 保存期间可能又有新输入，只有队列清空才算已保存
+    if (pendingContents.size === 0 && !pendingTree) set({ saveState: 'saved' })
+  } catch (error) {
+    for (const [id, content] of contents) {
+      // 不覆盖失败期间新输入的内容
+      if (!pendingContents.has(id)) pendingContents.set(id, content)
+    }
+    if (tree && !pendingTree) pendingTree = tree
+    set({ saveState: 'idle' })
+    if (rethrow) throw error
+  }
+}
+
+function queueSave(nodes: TreeNode[], set: (partial: Partial<NoteStore>) => void): void {
+  pendingTree = nodes
+  scheduleSave(set)
 }
 
 function removeStoredContent(nodes: TreeNode[]): void {
@@ -153,7 +186,10 @@ function removeStoredContent(nodes: TreeNode[]): void {
       docIds.push(node.id)
     }
   }
-  if (docIds.length > 0) void removeNodeContents(docIds)
+  if (docIds.length > 0) {
+    removeSearchCache(docIds)
+    void removeNodeContents(docIds)
+  }
 }
 
 function createRepository(get: () => NoteStore): NoteRepository {
@@ -417,17 +453,8 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
       saveTimer = null
     }
 
-    const contents = new Map(pendingContents)
-    pendingContents.clear()
     set({ saveState: 'saving' })
-    try {
-      await saveTreeWithContents(get().nodes, contents)
-      set({ saveState: 'saved' })
-    } catch (error) {
-      for (const [id, content] of contents) pendingContents.set(id, content)
-      set({ saveState: 'idle' })
-      throw error
-    }
+    await flushSaveQueue(set, true)
   },
 
   applyRestored: (nodes, wrapperIds) => {
@@ -436,6 +463,8 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
       saveTimer = null
     }
     pendingContents.clear()
+    pendingTree = null
+    invalidateSearchCache()
 
     const index = getTreeIndex(nodes)
     let activeId = get().activeId
@@ -462,7 +491,7 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   updateContent: (id, content) => {
     // 正文只进 pending，不改树数组：避免每次输入都重建索引与重渲染侧栏
     pendingContents.set(id, content)
-    queueSave(get().nodes, set)
+    scheduleSave(set)
   },
 
   toggleExpanded: (id) => {

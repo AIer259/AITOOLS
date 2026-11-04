@@ -7,7 +7,12 @@ import { highlightCodeElements } from './codeHighlight'
 import { loadBlob, loadNodeContent } from './db'
 import { EXPORT_CSS } from './exportStyles'
 import { escapeHtml } from './html'
-import { extensionForMime, getAssetMeta, loadAssetBlob } from './imageAssets'
+import {
+  extensionForMime,
+  loadAssetBlob,
+  loadAssetIndex,
+  type AssetMeta,
+} from './imageAssets'
 import { docJsonToHtml } from './renderDoc'
 import { getTreeIndex } from './treeIndex'
 import { findAttachmentFolder } from './treeDrag'
@@ -28,9 +33,24 @@ export interface ExportImage {
   height?: number
 }
 
+export interface ExportAssetCache {
+  metaById: Map<string, AssetMeta>
+  blobs: Map<string, Blob | null>
+}
+
+/** 一次导出只读一次资源索引，并在同一批文档间复用已读取的 Blob */
+export async function createExportAssetCache(): Promise<ExportAssetCache> {
+  const index = await loadAssetIndex()
+  return {
+    metaById: new Map(index.map((asset) => [asset.id, asset])),
+    blobs: new Map(),
+  }
+}
+
 export interface HydrateImagesOptions {
   /** 自定义图片在 ZIP 中的路径与 Markdown 中的相对路径 */
   resolveTarget?: (assetId: string, mime: string) => { src: string; path: string }
+  assetCache?: ExportAssetCache
 }
 
 interface HydratedExport {
@@ -161,7 +181,11 @@ export function safeFileName(name: string): string {
   return cleaned || '未命名文档'
 }
 
-export function downloadBlob(blob: Blob, filename: string): void {
+export function downloadBlob(
+  blob: Blob,
+  filename: string,
+  revokeDelayMs = 1500,
+): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -170,7 +194,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1500)
+  window.setTimeout(() => URL.revokeObjectURL(url), revokeDelayMs)
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -202,6 +226,9 @@ export async function hydrateImagesForExport(
   const folder = safeFolderName(title)
   const images: ExportImage[] = []
   const cache = new Map<string, { src: string; image?: ExportImage }>()
+  let assetCache = options?.assetCache
+  const getAssetCache = async () =>
+    assetCache ?? (assetCache = await createExportAssetCache())
 
   for (const image of Array.from(container.querySelectorAll<HTMLImageElement>('img[data-note-image]'))) {
     const assetId = image.getAttribute('data-asset-id')
@@ -212,12 +239,18 @@ export async function hydrateImagesForExport(
 
     let cached = cache.get(assetId)
     if (!cached) {
-      const [meta, blob] = await Promise.all([getAssetMeta(assetId), loadAssetBlob(assetId)])
+      const assets = await getAssetCache()
+      let blob = assets.blobs.get(assetId)
+      if (blob === undefined && !assets.blobs.has(assetId)) {
+        blob = (await loadAssetBlob(assetId)) ?? null
+        assets.blobs.set(assetId, blob)
+      }
       if (!blob) {
         image.remove()
         continue
       }
 
+      const meta = assets.metaById.get(assetId)
       const mime = meta?.mime || blob.type || 'image/png'
 
       if (mode === 'data-url') {
@@ -333,6 +366,7 @@ export async function exportMarkdown(editor: Editor, title: string): Promise<voi
 interface AttachmentExport {
   path: string
   blob: Blob
+  binary: boolean
 }
 
 interface AttachmentBundle {
@@ -344,6 +378,7 @@ async function buildAttachmentExports(
   editor: Editor,
   title: string,
   context: ExportContext,
+  assetCache: ExportAssetCache,
 ): Promise<AttachmentBundle> {
   const docIds = collectEmbeddedDocIds(editor.getJSON())
   const { nodes, activeId } = context
@@ -394,13 +429,15 @@ async function buildAttachmentExports(
         ? await context.readContent(doc.id)
         : await loadNodeContent(doc.id)
       const html = docJsonToHtml(content)
-      const hydrated = await hydrateImagesForExport(html, doc.name, 'data-url')
+      const hydrated = await hydrateImagesForExport(html, doc.name, 'data-url', {
+        assetCache,
+      })
       const markdown = buildMarkdownFromHtml(hydrated.html, doc.name)
       blob = new Blob([markdown], { type: `${meta.mime};charset=utf-8` })
     }
 
     const path = `${folderPath}/${filename}`
-    attachments.push({ path, blob })
+    attachments.push({ path, blob, binary: type === 'pdf' || type === 'docx' })
     paths.set(doc.id, path)
   }
 
@@ -412,15 +449,31 @@ export async function exportMarkdownZip(
   title: string,
   context: ExportContext,
 ): Promise<void> {
-  const { attachments, paths } = await buildAttachmentExports(editor, title, context)
-  const { html, images } = await hydrateImagesForExport(editor.getHTML(), title, 'files')
+  const assetCache = await createExportAssetCache()
+  const { attachments, paths } = await buildAttachmentExports(
+    editor,
+    title,
+    context,
+    assetCache,
+  )
+  const { html, images } = await hydrateImagesForExport(editor.getHTML(), title, 'files', {
+    assetCache,
+  })
   const markdown = buildMarkdownFromHtml(html, title, paths)
   const JSZip = (await import('jszip')).default
   const zip = new JSZip()
 
   zip.file(`${safeFileName(title)}.md`, markdown)
-  for (const image of images) zip.file(image.path, image.blob)
-  for (const attachment of attachments) zip.file(attachment.path, attachment.blob)
+  for (const image of images) {
+    zip.file(image.path, image.blob, { compression: 'STORE' })
+  }
+  for (const attachment of attachments) {
+    zip.file(
+      attachment.path,
+      attachment.blob,
+      attachment.binary ? { compression: 'STORE' } : undefined,
+    )
+  }
 
   const blob = await zip.generateAsync({ type: 'blob' })
   downloadBlob(blob, `${safeFileName(title)}-images.zip`)

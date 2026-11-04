@@ -1,5 +1,5 @@
-import { AREA_LABEL, type TreeNode } from '../types'
-import { getDescendantIds, getPath } from './tree'
+import type { TreeNode } from '../types'
+import { formatNodePath, getDescendantIds } from './tree'
 import type { TreeIndex } from './treeIndex'
 
 export interface TrashBundleSummary {
@@ -94,9 +94,7 @@ export function summarizeTrash(
 }
 
 export function getTrashLocation(index: TreeIndex, node: TreeNode): string {
-  const path = node.parentId ? getPath(index, node.parentId) : []
-  const names = path.map((item) => item.name || '未命名')
-  return [AREA_LABEL[node.area], ...names].join(' / ')
+  return formatNodePath(index, node)
 }
 
 export function formatTrashTime(timestamp: number | undefined): string {

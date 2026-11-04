@@ -11,8 +11,11 @@ function scrollCurrent(box: HTMLElement) {
 
 export function SearchPanel() {
   const editor = useUiStore((state) => state.editor)
+  const contentReadyId = useUiStore((state) => state.contentReadyId)
   const open = useUiStore((state) => state.searchOpen)
   const setOpen = useUiStore((state) => state.setSearchOpen)
+  const pendingSearch = useUiStore((state) => state.pendingSearch)
+  const clearPendingSearch = useUiStore((state) => state.clearPendingSearch)
   const activeId = useNoteStore((state) => state.activeId)
 
   const [query, setQuery] = useState('')
@@ -28,9 +31,27 @@ export function SearchPanel() {
     editor.view.dispatch(transaction)
   }
 
+  const applyQuery = (value: string) => {
+    setQuery(value)
+    if (!editor) return
+
+    const matches = findMatches(editor.state.doc, value)
+    setCount(matches.length)
+    setIndex(0)
+    dispatchSearch(value, 0)
+
+    if (matches.length > 0) {
+      requestAnimationFrame(() => scrollCurrent(editor.view.dom))
+    }
+  }
+
   useEffect(() => {
-    if (!editor && open) setOpen(false)
-  }, [editor, open, setOpen])
+    if (!editor && open && !pendingSearch) setOpen(false)
+  }, [editor, open, pendingSearch, setOpen])
+
+  useEffect(() => {
+    if (!open) clearPendingSearch()
+  }, [open, clearPendingSearch])
 
   useEffect(() => {
     if (!editor) return
@@ -47,21 +68,16 @@ export function SearchPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeId, editor])
 
+  useEffect(() => {
+    if (!open || !editor || !pendingSearch) return
+    if (pendingSearch.docId !== activeId || contentReadyId !== activeId) return
+
+    applyQuery(pendingSearch.query)
+    clearPendingSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editor, activeId, contentReadyId, pendingSearch, clearPendingSearch])
+
   if (!open) return null
-
-  const applyQuery = (value: string) => {
-    setQuery(value)
-    if (!editor) return
-
-    const matches = findMatches(editor.state.doc, value)
-    setCount(matches.length)
-    setIndex(0)
-    dispatchSearch(value, 0)
-
-    if (matches.length > 0) {
-      requestAnimationFrame(() => scrollCurrent(editor.view.dom))
-    }
-  }
 
   const go = (delta: number) => {
     if (!editor || count === 0) return

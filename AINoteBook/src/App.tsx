@@ -5,6 +5,7 @@ import { EmbedPicker } from './components/Editor/EmbedPicker'
 import { FilePreview } from './components/Editor/FilePreview'
 import { NoteEditor } from './components/Editor/NoteEditor'
 import { TopBar } from './components/Editor/TopBar'
+import { GlobalSearchDialog } from './components/Search/GlobalSearchDialog'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TocPanel } from './components/Toc/TocPanel'
 import { TrashView } from './components/Trash/TrashView'
@@ -61,6 +62,18 @@ export default function App() {
 
   useEffect(() => {
     clearVersionParam()
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        useUiStore.getState().openGlobalSearch()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   useEffect(() => {
@@ -139,6 +152,7 @@ export default function App() {
         {showToc && <TocPanel />}
       </div>
       <EmbedPicker />
+      <GlobalSearchDialog />
       <ToastStack />
       {update && (
         <UpdateDialog

@@ -1,7 +1,9 @@
-import type { JSONContent } from '@tiptap/core'
-import { del, get, set } from 'idb-keyval'
+import { del, get, getMany, set } from 'idb-keyval'
 import type { TreeNode } from '../types'
-import { loadNodeContent, loadTree } from './db'
+import { ASSET_REF_PREFIX } from './assetRefs'
+import { loadTree } from './db'
+import { ensureDerivedIndexes } from './derivedIndexes'
+import { contentDocIds } from './treeIndex'
 
 export interface AssetMeta {
   id: string
@@ -239,33 +241,24 @@ export function collectImageFiles(data: DataTransfer | null): File[] {
     .filter((file): file is File => Boolean(file))
 }
 
-export async function collectReferencedAssetIds(nodes: TreeNode[]): Promise<Set<string>> {
-  const ids = new Set<string>()
+async function loadReferencedAssetIds(nodes: TreeNode[]): Promise<Set<string>> {
+  const ids = contentDocIds(nodes)
+  const refs = await getMany<string[]>(ids.map((id) => ASSET_REF_PREFIX + id))
+  const referenced = new Set<string>()
 
-  const visit = (content: JSONContent | undefined) => {
-    if (!content) return
-    if (content.type === 'noteImage' && content.attrs?.assetId) {
-      ids.add(String(content.attrs.assetId))
-    }
-    content.content?.forEach(visit)
+  for (const list of refs) {
+    for (const id of list ?? []) referenced.add(id)
   }
 
-  await Promise.all(
-    nodes
-      .filter((node) => node.kind === 'doc')
-      .map(async (node) => {
-        const content = await loadNodeContent(node.id)
-        visit(content)
-      }),
-  )
-
-  return ids
+  return referenced
 }
 
 export async function sweepUnusedAssets(graceMs = ASSET_GRACE_MS): Promise<SweepResult> {
   return withAssetLock(async () => {
     const [nodes, index] = await Promise.all([loadTree(), loadAssetIndex()])
-    const referenced = await collectReferencedAssetIds(nodes ?? [])
+    const tree = nodes ?? []
+    await ensureDerivedIndexes(tree)
+    const referenced = await loadReferencedAssetIds(tree)
     const now = Date.now()
     const candidates = index.filter(
       (asset) => !referenced.has(asset.id) && now - asset.lastUsedAt > graceMs,

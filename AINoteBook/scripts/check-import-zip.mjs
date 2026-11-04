@@ -196,7 +196,7 @@ try {
   )
   assert.deepEqual(await breadcrumb(), ['空间', 'TEXT'])
 
-  const zipInput = await page.$('input[accept*=".zip"]')
+  const zipInput = await page.$('.topbar-actions > input[accept*=".zip"]')
   assert.ok(zipInput, '未找到 ZIP 文件输入框')
   await zipInput.uploadFile(zipPath)
   await page.waitForFunction(

@@ -1,8 +1,9 @@
-import { Archive, ArchiveRestore } from 'lucide-react'
+import { Archive, ArchiveRestore, Download } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
 import { formatBackupTime } from '../../lib/backup'
 import {
   readBackupSummary,
+  readBackupSummaryStreaming,
   restoreFolderLabel,
   type BackupArchiveSummary,
 } from '../../lib/backupRestore'
@@ -14,6 +15,7 @@ import { PopupMenu } from '../common/PopupMenu'
 interface RestoreCandidate {
   file: File
   summary: BackupArchiveSummary
+  streaming: boolean
 }
 
 function summaryTime(summary: BackupArchiveSummary): string {
@@ -24,6 +26,7 @@ function summaryTime(summary: BackupArchiveSummary): string {
 
 export function BackupMenu() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const modeRef = useRef<'normal' | 'streaming'>('normal')
   const [menuOpen, setMenuOpen] = useState(false)
   const [candidate, setCandidate] = useState<RestoreCandidate | null>(null)
   const [inspecting, setInspecting] = useState(false)
@@ -31,7 +34,11 @@ export function BackupMenu() {
   const busy = useBackupStore((state) => state.busy)
   const restoring = useBackupStore((state) => state.restoring)
   const runBackup = useBackupStore((state) => state.runBackup)
+  const runStreamingBackup = useBackupStore((state) => state.runStreamingBackup)
   const restoreBackup = useBackupStore((state) => state.restoreBackup)
+  const restoreStreamingBackup = useBackupStore(
+    (state) => state.restoreStreamingBackup,
+  )
   const showToast = useUiStore((state) => state.showToast)
 
   const disabled = busy || restoring || inspecting
@@ -41,14 +48,17 @@ export function BackupMenu() {
     event.target.value = ''
     if (!file) return
 
+    const streaming = modeRef.current === 'streaming'
     setInspecting(true)
     try {
-      const summary = await readBackupSummary(file)
+      const summary = streaming
+        ? await readBackupSummaryStreaming(file)
+        : await readBackupSummary(file)
       if (summary.docs === 0) {
         showToast('备份中没有可恢复的文档', 'error')
         return
       }
-      setCandidate({ file, summary })
+      setCandidate({ file, summary, streaming })
     } catch (error) {
       console.error('读取备份失败', error)
       showToast(
@@ -62,7 +72,9 @@ export function BackupMenu() {
 
   const handleRestore = async () => {
     if (!candidate) return
-    const result = await restoreBackup(candidate.file)
+    const result = candidate.streaming
+      ? await restoreStreamingBackup(candidate.file)
+      : await restoreBackup(candidate.file)
     if (result) setCandidate(null)
   }
 
@@ -107,9 +119,27 @@ export function BackupMenu() {
               },
             },
             {
+              label: busy ? '正在导出…' : '流式导出全部笔记',
+              icon: <Download size={14} />,
+              onSelect: () => {
+                if (!busy) void runStreamingBackup()
+              },
+            },
+            {
               label: restoring ? '正在恢复…' : '从备份恢复',
               icon: <ArchiveRestore size={14} />,
-              onSelect: () => inputRef.current?.click(),
+              onSelect: () => {
+                modeRef.current = 'normal'
+                inputRef.current?.click()
+              },
+            },
+            {
+              label: restoring ? '正在恢复…' : '流式从备份恢复',
+              icon: <ArchiveRestore size={14} />,
+              onSelect: () => {
+                modeRef.current = 'streaming'
+                inputRef.current?.click()
+              },
             },
           ]}
         />
@@ -126,9 +156,11 @@ export function BackupMenu() {
 
       {candidate && (
         <ConfirmDialog
-          title="从备份恢复"
+          title={candidate.streaming ? '流式从备份恢复' : '从备份恢复'}
           message={message}
-          confirmText={restoring ? '正在恢复…' : '合并恢复'}
+          confirmText={
+            restoring ? '正在恢复…' : candidate.streaming ? '流式恢复' : '合并恢复'
+          }
           danger={false}
           confirmDisabled={restoring}
           onCancel={() => {

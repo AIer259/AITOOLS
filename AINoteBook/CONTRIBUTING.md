@@ -47,6 +47,8 @@ npm run check
 
 - 树元数据存 `ainb.tree.v2`，Markdown 正文只存 `ainb.node.<id>`；不要再给 `TreeNode` 加回 `content`
 - 读取正文使用 `loadNodeContent` 或 store 的 `readContent`（会优先返回尚未落盘的待保存内容）
+- 图片引用由正文保存自动写入 `ainb.assetRef.<id>`；新增正文中的资源节点类型时，同步更新 `src/lib/assetRefs.ts` 的收集逻辑，图片清理只读这份索引
+- 搜索文本由正文保存自动写入 `ainb.search.<id>`（原文 + 小写副本）；首次构建与图片引用共用 `derivedIndexes.ts` 的一次正文扫描；搜索逻辑放 `lib/`，不得 import React 或 store
 - 树查询不要反复扫描扁平数组：组件用 `useTreeIndex()`、领域/用例用 `getTreeIndex(nodes)`，通过 `byId` / `activeChildren` / `trashRoots` 读取
 - 新节点必须生成 fractional-index `order`；兄弟排序用 `compareOrder`
 - 附件关系使用 `doc.attachmentFolderId` 与 `folder.ownerDocId` 双向关联，不要按名称反查

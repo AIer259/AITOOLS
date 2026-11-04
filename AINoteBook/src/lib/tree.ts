@@ -1,4 +1,4 @@
-import type { Area, TreeNode } from '../types'
+import { AREA_LABEL, type Area, type TreeNode } from '../types'
 import type { TreeIndex } from './treeIndex'
 
 export function getNode(index: TreeIndex, id: string | null): TreeNode | undefined {
@@ -27,6 +27,14 @@ export function getPath(index: TreeIndex, id: string | null): TreeNode[] {
     guard += 1
   }
   return path
+}
+
+/** 区域 + 父级文件夹路径，不含文档自身 */
+export function formatNodePath(index: TreeIndex, node: TreeNode): string {
+  const parents = node.parentId ? getPath(index, node.parentId) : []
+  return [AREA_LABEL[node.area], ...parents.map((item) => item.name || '未命名')].join(
+    ' / ',
+  )
 }
 
 /** 子树 id 集合（含自身），复杂度 O(子树大小) */

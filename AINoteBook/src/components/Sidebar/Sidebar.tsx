@@ -8,6 +8,7 @@ import {
   Plus,
   Sun,
   Trash2,
+  Search,
 } from 'lucide-react'
 import { useEffect, useState, type DragEvent as ReactDragEvent } from 'react'
 import { showMoveResult } from './moveFeedback'
@@ -48,6 +49,7 @@ export function Sidebar() {
   const storageInfo = useUiStore((state) => state.storageInfo)
   const refreshStorage = useUiStore((state) => state.refreshStorage)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
+  const openGlobalSearch = useUiStore((state) => state.openGlobalSearch)
   const trashCount = index.trashRoots.length
 
   const [menuArea, setMenuArea] = useState<Area | null>(null)
@@ -127,6 +129,18 @@ export function Sidebar() {
           <PanelLeftClose size={16} />
         </button>
       </div>
+
+      <button
+        type="button"
+        className="sidebar-global-search"
+        title="全局搜索（Ctrl+K）"
+        aria-label="全局搜索"
+        onClick={openGlobalSearch}
+      >
+        <Search size={14} />
+        <span>搜索全部笔记</span>
+        <kbd>Ctrl K</kbd>
+      </button>
 
       <div className="sidebar-scroll">
         {SECTIONS.map((section) => {
