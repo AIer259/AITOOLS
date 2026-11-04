@@ -256,7 +256,7 @@ await page.waitForSelector('.popup-menu')
 const moreButtons = await page.$$('.popup-menu button')
 for (const button of moreButtons) {
   const text = await button.evaluate((el) => el.textContent ?? '')
-  if (text.includes('删除')) {
+  if (text.includes('回收站')) {
     await button.click()
     break
   }
@@ -267,6 +267,15 @@ await confirmButtons[confirmButtons.length - 1].click()
 await page.waitForFunction(
   () => ![...document.querySelectorAll('.row-name')].some((el) => el.textContent === '图片测试'),
 )
+
+// 回收站内永久删除，资源才应被 mark-sweep 清理
+await page.click('.sidebar-trash')
+await page.waitForSelector('.trash-view')
+await page.click('.trash-item .btn.danger-ghost')
+await page.waitForSelector('.dialog-message')
+const trashConfirmButtons = await page.$$('.dialog-actions button')
+await trashConfirmButtons[trashConfirmButtons.length - 1].click()
+await page.waitForSelector('.trash-empty')
 await new Promise((resolve) => setTimeout(resolve, 1200))
 
 // 生产预览没有 /src 模块，资源清理仅开发环境可直调

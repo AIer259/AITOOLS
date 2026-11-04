@@ -9,6 +9,7 @@ import { EXPORT_CSS } from './exportStyles'
 import { escapeHtml } from './html'
 import { extensionForMime, getAssetMeta, loadAssetBlob } from './imageAssets'
 import { docJsonToHtml } from './renderDoc'
+import { getTreeIndex } from './treeIndex'
 import { findAttachmentFolder } from './treeDrag'
 
 export interface ExportContext {
@@ -17,9 +18,19 @@ export interface ExportContext {
   readContent?: (id: string) => Promise<JSONContent | undefined>
 }
 
-interface ExportImage {
+export interface ExportImage {
   path: string
   blob: Blob
+  assetId?: string
+  mime?: string
+  hash?: string
+  width?: number
+  height?: number
+}
+
+export interface HydrateImagesOptions {
+  /** 自定义图片在 ZIP 中的路径与 Markdown 中的相对路径 */
+  resolveTarget?: (assetId: string, mime: string) => { src: string; path: string }
 }
 
 interface HydratedExport {
@@ -150,7 +161,7 @@ export function safeFileName(name: string): string {
   return cleaned || '未命名文档'
 }
 
-function downloadBlob(blob: Blob, filename: string): void {
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -171,7 +182,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-function safeFolderName(name: string): string {
+export function safeFolderName(name: string): string {
   const folder = safeFileName(name)
     .replace(/^\.+/, '')
     .replace(/\.+$/, '')
@@ -179,10 +190,11 @@ function safeFolderName(name: string): string {
   return folder || '未命名文档'
 }
 
-async function hydrateImagesForExport(
+export async function hydrateImagesForExport(
   html: string,
   title: string,
   mode: 'data-url' | 'files',
+  options?: HydrateImagesOptions,
 ): Promise<HydratedExport> {
   const container = document.createElement('div')
   container.innerHTML = html
@@ -207,14 +219,24 @@ async function hydrateImagesForExport(
       }
 
       const mime = meta?.mime || blob.type || 'image/png'
-      const filename = `${assetId.slice(0, 12)}.${extensionForMime(mime)}`
-      const relativePath = `assets/photos/${folder}/${filename}`
 
       if (mode === 'data-url') {
         cached = { src: await blobToDataUrl(blob) }
       } else {
-        const exportImage = { path: relativePath, blob }
-        cached = { src: relativePath, image: exportImage }
+        const filename = `${assetId.slice(0, 12)}.${extensionForMime(mime)}`
+        const target = options?.resolveTarget?.(assetId, mime)
+        const path = target?.path ?? `assets/photos/${folder}/${filename}`
+        const src = target?.src ?? path
+        const exportImage = {
+          path,
+          blob,
+          assetId,
+          mime,
+          hash: meta?.hash,
+          width: meta?.width,
+          height: meta?.height,
+        }
+        cached = { src, image: exportImage }
         images.push(exportImage)
       }
       cache.set(assetId, cached)
@@ -246,7 +268,7 @@ async function waitForImages(container: ParentNode): Promise<void> {
   )
 }
 
-function buildMarkdownFromHtml(
+export function buildMarkdownFromHtml(
   html: string,
   title: string,
   embedPaths?: Map<string, string>,
@@ -325,17 +347,18 @@ async function buildAttachmentExports(
 ): Promise<AttachmentBundle> {
   const docIds = collectEmbeddedDocIds(editor.getJSON())
   const { nodes, activeId } = context
-  const active = nodes.find((node) => node.id === activeId)
-  const folder = active ? findAttachmentFolder(nodes, active) : undefined
+  const index = getTreeIndex(nodes)
+  const active = index.byId.get(activeId ?? '')
+  const folder = active ? findAttachmentFolder(index, active) : undefined
   const candidates = new Map<string, TreeNode>()
 
   for (const docId of docIds) {
-    const doc = nodes.find((node) => node.id === docId && node.kind === 'doc')
-    if (doc) candidates.set(doc.id, doc)
+    const doc = index.byId.get(docId)
+    if (doc?.kind === 'doc') candidates.set(doc.id, doc)
   }
   if (folder) {
-    for (const node of nodes) {
-      if (node.kind === 'doc' && node.parentId === folder.id) candidates.set(node.id, node)
+    for (const node of index.activeChildren.get(folder.id) ?? []) {
+      if (node.kind === 'doc') candidates.set(node.id, node)
     }
   }
 
@@ -345,7 +368,7 @@ async function buildAttachmentExports(
   const paths = new Map<string, string>()
 
   for (const doc of candidates.values()) {
-    const parent = nodes.find((node) => node.id === doc.parentId)
+    const parent = index.byId.get(doc.parentId ?? '')
     const folderPath = parent?.kind === 'folder' ? safeFolderName(parent.name) : defaultFolder
     const type = doc.docType ?? 'md'
     const meta = DOC_TYPE_META[type]

@@ -6,12 +6,14 @@ import { loadBlob } from '../../lib/db'
 import { hydrateImageElements } from '../../lib/imageAssets'
 import { docJsonToHtml } from '../../lib/renderDoc'
 import { useNoteStore } from '../../store/useNoteStore'
+import { useTreeIndex } from '../../store/useTreeIndex'
 import { DOC_TYPE_LABEL, type DocType } from '../../types'
 import { DocTypeIcon } from '../common/DocTypeIcon'
 
 export function EmbedNodeView(props: NodeViewProps) {
   const docId = String(props.node.attrs.docId ?? '')
-  const node = useNoteStore((state) => state.nodes.find((item) => item.id === docId))
+  const index = useTreeIndex()
+  const node = index.byId.get(docId)
   const readContent = useNoteStore((state) => state.readContent)
 
   const [expanded, setExpanded] = useState(false)

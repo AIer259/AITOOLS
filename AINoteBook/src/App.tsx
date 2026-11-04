@@ -1,12 +1,15 @@
 import { FileText, Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { BackupBanner } from './components/Backup/BackupBanner'
 import { EmbedPicker } from './components/Editor/EmbedPicker'
 import { FilePreview } from './components/Editor/FilePreview'
 import { NoteEditor } from './components/Editor/NoteEditor'
 import { TopBar } from './components/Editor/TopBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TocPanel } from './components/Toc/TocPanel'
+import { TrashView } from './components/Trash/TrashView'
 import { WorkspaceView } from './components/Workspace/WorkspaceView'
+import { SidebarResizer } from './components/common/SidebarResizer'
 import { ToastStack } from './components/common/ToastStack'
 import { UpdateDialog } from './components/common/UpdateDialog'
 import {
@@ -20,26 +23,41 @@ import {
   skipVersion,
 } from './lib/appUpdate'
 import { sweepUnusedAssets } from './lib/imageAssets'
+import { applySidebarWidth } from './lib/sidebarLayout'
+import { useBackupStore } from './store/useBackupStore'
 import { useNavigationStore } from './store/useNavigationStore'
 import { useNoteStore } from './store/useNoteStore'
+import { useTreeIndex } from './store/useTreeIndex'
 import { useUiStore } from './store/useUiStore'
 
 export default function App() {
   const ready = useNoteStore((state) => state.ready)
-  const nodes = useNoteStore((state) => state.nodes)
   const activeId = useNoteStore((state) => state.activeId)
   const init = useNoteStore((state) => state.init)
+  const initBackup = useBackupStore((state) => state.init)
+  const index = useTreeIndex()
   const browsing = useNavigationStore((state) => state.browse !== null)
+  const trashOpen = useNavigationStore((state) => state.trashOpen)
   const tocOpen = useUiStore((state) => state.tocOpen)
   const refreshStorage = useUiStore((state) => state.refreshStorage)
+  const sidebarOpen = useUiStore((state) => state.sidebarOpen)
+  const sidebarWidth = useUiStore((state) => state.sidebarWidth)
   const startupRef = useRef(false)
   const [update, setUpdate] = useState<{ current: string; latest: string } | null>(
     null,
   )
 
+  useLayoutEffect(() => {
+    applySidebarWidth(sidebarWidth)
+  }, [sidebarWidth])
+
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    if (ready) initBackup()
+  }, [ready, initBackup])
 
   useEffect(() => {
     clearVersionParam()
@@ -87,17 +105,26 @@ export default function App() {
     return <div className="loading-screen">正在加载本地笔记…</div>
   }
 
-  const active = nodes.find((node) => node.id === activeId)
+  const activeNode = index.byId.get(activeId ?? '')
+  const active = activeNode && !activeNode.deletedAt ? activeNode : undefined
   const isFilePreview = active?.docType === 'pdf' || active?.docType === 'docx'
-  const showToc = tocOpen && !browsing
+  const showToc = tocOpen && !browsing && !trashOpen
 
   return (
     <>
-      <div className={`app${showToc ? ' with-toc' : ''}`}>
-        <Sidebar />
+      <div className="app">
+        {sidebarOpen && (
+          <>
+            <Sidebar />
+            <SidebarResizer />
+          </>
+        )}
         <main className="main">
           <TopBar />
-          {browsing ? (
+          <BackupBanner />
+          {trashOpen ? (
+            <TrashView />
+          ) : browsing ? (
             <WorkspaceView />
           ) : active ? (
             isFilePreview ? (

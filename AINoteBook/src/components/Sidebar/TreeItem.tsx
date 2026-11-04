@@ -8,14 +8,16 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { useMemo, useState, type DragEvent as ReactDragEvent } from 'react'
-import { compareOrder } from '../../lib/fractionalIndex'
+import { useState, type DragEvent as ReactDragEvent } from 'react'
+import { isSharedAttachmentFolder } from '../../lib/trash'
+import type { TreeIndex } from '../../lib/treeIndex'
 import { showMoveResult } from './moveFeedback'
 import {
   canDragNode,
   canDropOnFolder,
   findAttachmentFolder,
   getDraggedNodeId,
+  isAttachmentFolder,
   setDraggedNodeId,
 } from '../../lib/treeDrag'
 import { useNavigationStore } from '../../store/useNavigationStore'
@@ -28,21 +30,22 @@ import { PopupMenu } from '../common/PopupMenu'
 interface TreeItemProps {
   node: TreeNode
   depth: number
-  nodes: TreeNode[]
+  index: TreeIndex
 }
 
-export function TreeItem({ node, depth, nodes }: TreeItemProps) {
+export function TreeItem({ node, depth, index }: TreeItemProps) {
   const activeId = useNoteStore((state) => state.activeId)
   const expanded = useNoteStore((state) => state.expanded[node.id] ?? true)
   const browse = useNavigationStore((state) => state.browse)
-  const active = activeId === node.id && !browse
+  const trashOpen = useNavigationStore((state) => state.trashOpen)
+  const active = activeId === node.id && !browse && !trashOpen
   const browsing = browse?.folderId === node.id
   const openFolder = useNavigationStore((state) => state.openFolder)
   const openDocument = useNavigationStore((state) => state.openDocument)
   const toggleExpanded = useNoteStore((state) => state.toggleExpanded)
   const createNode = useNoteStore((state) => state.createNode)
   const renameNode = useNoteStore((state) => state.renameNode)
-  const deleteNode = useNoteStore((state) => state.deleteNode)
+  const trashNode = useNoteStore((state) => state.trashNode)
 
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
@@ -51,16 +54,17 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
   const [deleting, setDeleting] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dropTarget, setDropTarget] = useState(false)
-  const draggable = canDragNode(nodes, node)
+  const draggable = canDragNode(index, node)
 
-  const children = useMemo(
-    () =>
-      nodes
-        .filter((child) => child.parentId === node.id)
-        .sort((a, b) => compareOrder(a.order, b.order)),
-    [nodes, node.id],
-  )
-  const hasAttachmentFolder = deleting && Boolean(findAttachmentFolder(nodes, node))
+  const children = index.activeChildren.get(node.id) ?? []
+  const attachmentForDelete = findAttachmentFolder(index, node)
+  const hasAttachmentFolder =
+    deleting &&
+    Boolean(
+      attachmentForDelete &&
+        !isSharedAttachmentFolder(index, attachmentForDelete.id, node.id),
+    )
+  const attachmentFolder = isAttachmentFolder(node)
 
   const handleRowClick = () => {
     if (node.kind === 'folder') openFolder(node.area, node.id)
@@ -93,7 +97,7 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
     if (node.kind !== 'folder') return
 
     const dragId = getDraggedNodeId()
-    if (!dragId || !canDropOnFolder(nodes, dragId, node.id)) return
+    if (!dragId || !canDropOnFolder(index, dragId, node.id)) return
 
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -117,7 +121,7 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
     setDropTarget(false)
 
     if (!dragId || node.kind !== 'folder') return
-    if (!canDropOnFolder(nodes, dragId, node.id)) {
+    if (!canDropOnFolder(index, dragId, node.id)) {
       showMoveResult('invalid')
       return
     }
@@ -233,12 +237,16 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
               icon: <Pencil size={14} />,
               onSelect: () => setRenaming(true),
             },
-            {
-              label: '删除',
-              icon: <Trash2 size={14} />,
-              danger: true,
-              onSelect: () => setDeleting(true),
-            },
+            ...(attachmentFolder
+              ? []
+              : [
+                  {
+                    label: '移到回收站',
+                    icon: <Trash2 size={14} />,
+                    danger: true,
+                    onSelect: () => setDeleting(true),
+                  },
+                ]),
           ]}
         />
       )}
@@ -246,7 +254,7 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
       {node.kind === 'folder' && expanded && children.length > 0 && (
         <div className="tree-children">
           {children.map((child) => (
-            <TreeItem key={child.id} node={child} depth={depth + 1} nodes={nodes} />
+            <TreeItem key={child.id} node={child} depth={depth + 1} index={index} />
           ))}
         </div>
       )}
@@ -279,17 +287,18 @@ export function TreeItem({ node, depth, nodes }: TreeItemProps) {
 
       {deleting && (
         <ConfirmDialog
-          title={`删除${node.kind === 'folder' ? '文件夹' : '文档'}`}
+          title="移到回收站"
           message={
             node.kind === 'folder'
-              ? `将删除「${node.name}」及其中所有内容，删除后无法恢复。`
+              ? `将「${node.name}」及其中所有内容移到回收站，可随时恢复。`
               : hasAttachmentFolder
-                ? `将删除「${node.name}」及其附件文件夹，删除后无法恢复。`
-                : `确定删除「${node.name}」吗？删除后无法恢复。`
+                ? `将「${node.name}」及其附件文件夹移到回收站，可随时恢复。`
+                : `将「${node.name}」移到回收站，可随时恢复。`
           }
+          confirmText="移到回收站"
           onCancel={() => setDeleting(false)}
           onConfirm={() => {
-            deleteNode(node.id)
+            trashNode(node.id)
             setDeleting(false)
           }}
         />

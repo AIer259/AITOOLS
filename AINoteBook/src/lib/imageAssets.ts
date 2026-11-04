@@ -202,6 +202,31 @@ export async function saveImageAsset(file: Blob, noteName: string): Promise<Save
   })
 }
 
+/** 从备份恢复图片资源：同 id 的已有资源保留，只刷新索引 */
+export async function restoreImageAsset(meta: AssetMeta, blob: Blob): Promise<void> {
+  await withAssetLock(async () => {
+    const index = await loadAssetIndex()
+    const existing = index.find((asset) => asset.id === meta.id)
+    await set(ASSET_PREFIX + meta.id, blob)
+
+    const next: AssetMeta = existing
+      ? {
+          ...existing,
+          mime: meta.mime || existing.mime,
+          hash: meta.hash || existing.hash,
+          width: meta.width || existing.width,
+          height: meta.height || existing.height,
+          lastUsedAt: Date.now(),
+        }
+      : { ...meta, lastUsedAt: Date.now() }
+
+    await saveAssetIndex([
+      ...index.filter((asset) => asset.id !== meta.id),
+      next,
+    ])
+  })
+}
+
 export function collectImageFiles(data: DataTransfer | null): File[] {
   if (!data) return []
 

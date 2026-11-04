@@ -1,8 +1,8 @@
 import { FilePlus2, Folder, FolderPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { compareOrder } from '../../lib/fractionalIndex'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
+import { useTreeIndex } from '../../store/useTreeIndex'
 import { AREA_LABEL, DOC_TYPE_LABEL, type DocType, type NodeKind, type TreeNode } from '../../types'
 import { DocTypeIcon } from '../common/DocTypeIcon'
 import { NameDialog } from '../common/Dialogs'
@@ -13,22 +13,21 @@ function itemMeta(node: TreeNode): string {
   return `${DOC_TYPE_LABEL[type]} 文档`
 }
 
-function sortItems(items: TreeNode[]): TreeNode[] {
-  return [...items].sort((a, b) => compareOrder(a.order, b.order))
-}
-
 export function WorkspaceView() {
   const browse = useNavigationStore((state) => state.browse)
   const openArea = useNavigationStore((state) => state.openArea)
   const openFolder = useNavigationStore((state) => state.openFolder)
   const openDocument = useNavigationStore((state) => state.openDocument)
-  const nodes = useNoteStore((state) => state.nodes)
+  const index = useTreeIndex()
   const createNode = useNoteStore((state) => state.createNode)
 
   const [createKind, setCreateKind] = useState<NodeKind | null>(null)
 
-  const folder = browse?.folderId
-    ? nodes.find((node) => node.id === browse.folderId && node.kind === 'folder')
+  const folderNode = browse?.folderId
+    ? index.byId.get(browse.folderId)
+    : undefined
+  const folder = folderNode?.kind === 'folder' && !folderNode.deletedAt
+    ? folderNode
     : undefined
 
   useEffect(() => {
@@ -38,8 +37,8 @@ export function WorkspaceView() {
   if (!browse) return null
 
   const parentId = folder?.id ?? null
-  const children = sortItems(
-    nodes.filter((node) => node.area === browse.area && node.parentId === parentId),
+  const children = (index.activeChildren.get(parentId) ?? []).filter(
+    (node) => node.area === browse.area,
   )
   const locationName = folder?.name || AREA_LABEL[browse.area]
 

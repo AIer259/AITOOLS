@@ -160,9 +160,9 @@ const folderRowAgain = await rowHandle('测试文件夹')
 const folderMore = await folderRowAgain.$('.row-action[title="更多"]')
 await folderMore.click()
 await page.waitForSelector('.popup-menu')
-await clickIn('.popup-menu button', '删除')
+await clickIn('.popup-menu button', '移到回收站')
 await page.waitForSelector('.dialog-message')
-await clickIn('.dialog-actions button', '删除')
+await clickIn('.dialog-actions button', '移到回收站')
 await page.waitForFunction(
   () =>
     ![...document.querySelectorAll('.row-name')].some(

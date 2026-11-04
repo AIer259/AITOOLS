@@ -12,10 +12,13 @@ import {
   type CreateNodeInput,
   planAttachmentFolder,
   planCreateNode,
-  planDeleteNode,
+  planEmptyTrash,
   planEnsureFolder,
   planMoveNode,
   planPlaceEmbeddedDoc,
+  planPurgeNode,
+  planRestoreNode,
+  planTrashNode,
 } from '../domain/noteOps'
 import { STORAGE_KEYS } from '../lib/constants'
 import {
@@ -29,16 +32,22 @@ import {
   saveTreeWithContents,
 } from '../lib/db'
 import { createSeedData } from '../lib/seed'
+import { firstDoc } from '../lib/tree'
+import { getTreeIndex } from '../lib/treeIndex'
 import {
   isAttachmentFolder,
   type MoveOptions,
   type MoveResult,
   type MoveTarget,
 } from '../lib/treeDrag'
-import { firstDoc } from '../lib/tree'
 import type { DocType, NodeLocation, Theme, TreeNode } from '../types'
 
 export type SaveState = 'idle' | 'saving' | 'saved'
+
+export interface RestoreResult {
+  name: string
+  reparented: boolean
+}
 
 interface NoteStore {
   nodes: TreeNode[]
@@ -66,7 +75,12 @@ interface NoteStore {
   readContent: (id: string) => Promise<JSONContent | undefined>
   moveNodeTo: (id: string, target: MoveTarget, options?: MoveOptions) => MoveResult
   renameNode: (id: string, name: string) => void
-  deleteNode: (id: string) => void
+  trashNode: (id: string) => void
+  restoreNode: (id: string) => RestoreResult | null
+  purgeNode: (id: string) => void
+  emptyTrash: () => void
+  flushSave: () => Promise<void>
+  applyRestored: (nodes: TreeNode[], wrapperIds: string[]) => void
   updateContent: (id: string, content: JSONContent) => void
   toggleExpanded: (id: string) => void
   setTheme: (theme: Theme) => void
@@ -118,6 +132,7 @@ function queueSave(nodes: TreeNode[], set: (partial: Partial<NoteStore>) => void
   set({ saveState: 'saving' })
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
+    saveTimer = null
     const contents = new Map(pendingContents)
     pendingContents.clear()
     saveTreeWithContents(nodes, contents)
@@ -129,18 +144,30 @@ function queueSave(nodes: TreeNode[], set: (partial: Partial<NoteStore>) => void
   }, 350)
 }
 
+function removeStoredContent(nodes: TreeNode[]): void {
+  const docIds: string[] = []
+  for (const node of nodes) {
+    if (node.blobId) void removeBlob(node.blobId)
+    if (node.kind === 'doc') {
+      pendingContents.delete(node.id)
+      docIds.push(node.id)
+    }
+  }
+  if (docIds.length > 0) void removeNodeContents(docIds)
+}
+
 function createRepository(get: () => NoteStore): NoteRepository {
   return {
     createNode: (input) => {
       const id = get().createNode(input)
-      const node = get().nodes.find((item) => item.id === id)
+      const node = getTreeIndex(get().nodes).byId.get(id)
       if (!node) throw new Error('创建节点失败')
       return node
     },
-    findNode: (id) => get().nodes.find((item) => item.id === id),
+    findNode: (id) => getTreeIndex(get().nodes).byId.get(id),
     activeLocation: () => {
       const { activeId, nodes } = get()
-      const active = nodes.find((node) => node.id === activeId)
+      const active = getTreeIndex(nodes).byId.get(activeId ?? '')
       return {
         area: active?.area ?? 'space',
         parentId: active ? active.parentId : null,
@@ -186,15 +213,17 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
         }
 
         nodes = stored
-        const savedActive = readActiveId()
-        const activeValid = savedActive
-          ? nodes.some((node) => node.id === savedActive && node.kind === 'doc')
-          : false
-        activeId = activeValid ? savedActive : (firstDoc(nodes)?.id ?? null)
       } catch {
         nodes = createSeedData().nodes
-        activeId = firstDoc(nodes)?.id ?? null
       }
+
+      const index = getTreeIndex(nodes)
+      const savedActive = readActiveId()
+      const savedNode = savedActive ? index.byId.get(savedActive) : undefined
+      activeId =
+        savedNode?.kind === 'doc' && !savedNode.deletedAt
+          ? savedNode.id
+          : (firstDoc(index)?.id ?? null)
 
       const theme = readTheme()
       applyTheme(theme)
@@ -202,7 +231,7 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
 
       const expanded: Record<string, boolean> = {}
       for (const node of nodes) {
-        if (node.kind === 'folder') expanded[node.id] = !isAttachmentFolder(nodes, node)
+        if (node.kind === 'folder') expanded[node.id] = !isAttachmentFolder(node)
       }
 
       set({ nodes, activeId, theme, expanded, ready: true, saveState: 'saved' })
@@ -215,18 +244,23 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     set({ activeId: id })
 
     if (!id) return
-    const nodes = get().nodes
+    const index = getTreeIndex(get().nodes)
     const expanded = { ...get().expanded }
-    let cursor = nodes.find((node) => node.id === id)
+    let cursor = index.byId.get(id)
     while (cursor?.parentId) {
       expanded[cursor.parentId] = true
-      cursor = nodes.find((node) => node.id === cursor?.parentId)
+      cursor = index.byId.get(cursor.parentId)
     }
     set({ expanded })
   },
 
   createNode: (input) => {
-    const plan = planCreateNode(get().nodes, get().expanded, input, makeId())
+    const plan = planCreateNode(
+      getTreeIndex(get().nodes),
+      get().expanded,
+      input,
+      makeId(),
+    )
     if (plan.content) pendingContents.set(plan.node.id, plan.content)
     set({ nodes: plan.nodes, expanded: plan.expanded })
     if (input.kind === 'doc' && input.activate !== false) {
@@ -238,7 +272,13 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   },
 
   ensureFolder: (location, name) => {
-    const plan = planEnsureFolder(get().nodes, get().expanded, location, name, makeId())
+    const plan = planEnsureFolder(
+      getTreeIndex(get().nodes),
+      get().expanded,
+      location,
+      name,
+      makeId(),
+    )
     if (plan.created) {
       set({ nodes: plan.nodes, expanded: plan.expanded })
       queueSave(plan.nodes, set)
@@ -247,8 +287,9 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   },
 
   ensureAttachmentFolder: (note) => {
-    const current = get().nodes.find((node) => node.id === note.id) ?? note
-    const plan = planAttachmentFolder(get().nodes, get().expanded, current, makeId())
+    const index = getTreeIndex(get().nodes)
+    const current = index.byId.get(note.id) ?? note
+    const plan = planAttachmentFolder(index, get().expanded, current, makeId())
     if (plan.nodes !== get().nodes || plan.expanded !== get().expanded) {
       set({ nodes: plan.nodes, expanded: plan.expanded })
       queueSave(plan.nodes, set)
@@ -257,10 +298,11 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   },
 
   placeEmbeddedDoc: (note, doc) => {
-    const currentNote = get().nodes.find((node) => node.id === note.id) ?? note
-    const currentDoc = get().nodes.find((node) => node.id === doc.id) ?? doc
+    const index = getTreeIndex(get().nodes)
+    const currentNote = index.byId.get(note.id) ?? note
+    const currentDoc = index.byId.get(doc.id) ?? doc
     const plan = planPlaceEmbeddedDoc(
-      get().nodes,
+      index,
       get().expanded,
       currentNote,
       currentDoc,
@@ -288,7 +330,13 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   },
 
   moveNodeTo: (id, target, options) => {
-    const plan = planMoveNode(get().nodes, get().expanded, id, target, options)
+    const plan = planMoveNode(
+      getTreeIndex(get().nodes),
+      get().expanded,
+      id,
+      target,
+      options,
+    )
     if (plan.result !== 'ok') return plan.result
 
     set({ nodes: plan.nodes, expanded: plan.expanded })
@@ -304,21 +352,34 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     queueSave(nodes, set)
   },
 
-  deleteNode: (id) => {
-    const plan = planDeleteNode(get().nodes, id)
+  trashNode: (id) => {
+    const plan = planTrashNode(getTreeIndex(get().nodes), id)
     if (!plan) return
 
-    const removedDocIds = plan.removed
-      .filter((node) => node.kind === 'doc')
-      .map((node) => node.id)
-    for (const node of plan.removed) {
-      if (node.blobId) void removeBlob(node.blobId)
-    }
-    if (removedDocIds.length > 0) {
-      for (const id of removedDocIds) pendingContents.delete(id)
-      void removeNodeContents(removedDocIds)
+    let activeId = get().activeId
+    if (activeId && plan.trashedIds.has(activeId)) {
+      activeId = plan.activeIdFallback
+      writeActiveId(activeId)
     }
 
+    set({ nodes: plan.nodes, activeId })
+    queueSave(plan.nodes, set)
+  },
+
+  restoreNode: (id) => {
+    const plan = planRestoreNode(getTreeIndex(get().nodes), id, get().expanded)
+    if (!plan) return null
+
+    set({ nodes: plan.nodes, expanded: plan.expanded })
+    queueSave(plan.nodes, set)
+    return { name: plan.root.name, reparented: plan.reparented }
+  },
+
+  purgeNode: (id) => {
+    const plan = planPurgeNode(getTreeIndex(get().nodes), id)
+    if (!plan) return
+
+    removeStoredContent(plan.removed)
     let activeId = get().activeId
     if (activeId && plan.removedIds.has(activeId)) {
       activeId = plan.activeIdFallback
@@ -332,13 +393,76 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
     queueSave(plan.remaining, set)
   },
 
+  emptyTrash: () => {
+    const plan = planEmptyTrash(getTreeIndex(get().nodes))
+    if (plan.removed.length === 0) return
+
+    removeStoredContent(plan.removed)
+    let activeId = get().activeId
+    if (activeId && plan.removedIds.has(activeId)) {
+      activeId = plan.activeIdFallback
+      writeActiveId(activeId)
+    }
+
+    const expanded = { ...get().expanded }
+    for (const removedId of plan.removedIds) delete expanded[removedId]
+
+    set({ nodes: plan.remaining, activeId, expanded })
+    queueSave(plan.remaining, set)
+  },
+
+  flushSave: async () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+
+    const contents = new Map(pendingContents)
+    pendingContents.clear()
+    set({ saveState: 'saving' })
+    try {
+      await saveTreeWithContents(get().nodes, contents)
+      set({ saveState: 'saved' })
+    } catch (error) {
+      for (const [id, content] of contents) pendingContents.set(id, content)
+      set({ saveState: 'idle' })
+      throw error
+    }
+  },
+
+  applyRestored: (nodes, wrapperIds) => {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    pendingContents.clear()
+
+    const index = getTreeIndex(nodes)
+    let activeId = get().activeId
+    if (!activeId || !index.byId.get(activeId)) {
+      activeId = index.activeDocs[0]?.id ?? null
+    }
+
+    const expanded = { ...get().expanded }
+    for (const id of wrapperIds) expanded[id] = true
+    for (const node of nodes) {
+      if (
+        node.kind === 'folder' &&
+        node.ownerDocId &&
+        expanded[node.id] === undefined
+      ) {
+        expanded[node.id] = false
+      }
+    }
+
+    writeActiveId(activeId)
+    set({ nodes, activeId, expanded, saveState: 'saved' })
+  },
+
   updateContent: (id, content) => {
+    // 正文只进 pending，不改树数组：避免每次输入都重建索引与重渲染侧栏
     pendingContents.set(id, content)
-    const nodes = get().nodes.map((node) =>
-      node.id === id ? { ...node, updatedAt: Date.now() } : node,
-    )
-    set({ nodes })
-    queueSave(nodes, set)
+    queueSave(get().nodes, set)
   },
 
   toggleExpanded: (id) => {

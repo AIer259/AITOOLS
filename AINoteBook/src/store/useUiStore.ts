@@ -1,5 +1,10 @@
 import type { Editor } from '@tiptap/core'
 import { create } from 'zustand'
+import {
+  clampSidebarWidth,
+  readSidebarLayout,
+  saveSidebarLayout,
+} from '../lib/sidebarLayout'
 import { getStorageInfo, type StorageInfo } from '../lib/storageInfo'
 
 export type ToastKind = 'info' | 'success' | 'error'
@@ -18,7 +23,11 @@ interface UiStore {
   embedInsertPos: number | null
   storageInfo: StorageInfo | null
   toasts: ToastItem[]
+  sidebarOpen: boolean
+  sidebarWidth: number
   setEditor: (editor: Editor | null) => void
+  toggleSidebar: () => void
+  setSidebarWidth: (width: number) => void
   toggleToc: () => void
   setSearchOpen: (open: boolean) => void
   openEmbedPicker: (pos: number) => void
@@ -29,6 +38,7 @@ interface UiStore {
 }
 
 let toastId = 0
+const initialSidebar = readSidebarLayout()
 
 export const useUiStore = create<UiStore>()((set) => ({
   editor: null,
@@ -38,8 +48,24 @@ export const useUiStore = create<UiStore>()((set) => ({
   embedInsertPos: null,
   storageInfo: null,
   toasts: [],
+  sidebarOpen: initialSidebar.open,
+  sidebarWidth: initialSidebar.width,
 
   setEditor: (editor) => set({ editor }),
+
+  toggleSidebar: () =>
+    set((state) => {
+      const open = !state.sidebarOpen
+      saveSidebarLayout({ open, width: state.sidebarWidth })
+      return { sidebarOpen: open }
+    }),
+
+  setSidebarWidth: (width) =>
+    set((state) => {
+      const next = clampSidebarWidth(width)
+      saveSidebarLayout({ open: state.sidebarOpen, width: next })
+      return { sidebarWidth: next }
+    }),
 
   toggleToc: () => set((state) => ({ tocOpen: !state.tocOpen })),
 

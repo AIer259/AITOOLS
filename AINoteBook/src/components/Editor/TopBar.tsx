@@ -6,12 +6,14 @@ import {
   FileText,
   FileType2,
   ListTree,
+  PanelLeftOpen,
   Printer,
   Search,
   Upload,
 } from 'lucide-react'
 import { Fragment, useMemo, useRef, useState } from 'react'
 import type { ImportKind } from '../../application/importDocument'
+import { BackupMenu } from '../Backup/BackupMenu'
 import {
   exportMarkdown,
   exportMarkdownZip,
@@ -21,6 +23,7 @@ import {
 import { getPath } from '../../lib/tree'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
+import { useTreeIndex } from '../../store/useTreeIndex'
 import { useUiStore } from '../../store/useUiStore'
 import { AREA_LABEL } from '../../types'
 import { PopupMenu } from '../common/PopupMenu'
@@ -29,11 +32,12 @@ import { SearchPanel } from './SearchPanel'
 type ExportKind = 'md' | 'md-zip' | 'pdf-direct' | 'pdf-print'
 
 export function TopBar() {
-  const nodes = useNoteStore((state) => state.nodes)
+  const index = useTreeIndex()
   const activeId = useNoteStore((state) => state.activeId)
   const saveState = useNoteStore((state) => state.saveState)
   const importDocument = useNoteStore((state) => state.importDocument)
   const browse = useNavigationStore((state) => state.browse)
+  const trashOpen = useNavigationStore((state) => state.trashOpen)
   const openArea = useNavigationStore((state) => state.openArea)
   const openFolder = useNavigationStore((state) => state.openFolder)
 
@@ -43,6 +47,8 @@ export function TopBar() {
   const searchOpen = useUiStore((state) => state.searchOpen)
   const setSearchOpen = useUiStore((state) => state.setSearchOpen)
   const showToast = useUiStore((state) => state.showToast)
+  const sidebarOpen = useUiStore((state) => state.sidebarOpen)
+  const toggleSidebar = useUiStore((state) => state.toggleSidebar)
 
   const [importOpen, setImportOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -52,11 +58,12 @@ export function TopBar() {
   const docxInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
 
-  const active = nodes.find((node) => node.id === activeId)
+  const activeNode = index.byId.get(activeId ?? '')
+  const active = activeNode && !activeNode.deletedAt ? activeNode : undefined
   const path = useMemo(() => {
-    if (browse) return browse.folderId ? getPath(nodes, browse.folderId) : []
-    return getPath(nodes, activeId)
-  }, [nodes, activeId, browse])
+    if (browse) return browse.folderId ? getPath(index, browse.folderId) : []
+    return getPath(index, activeId)
+  }, [index, activeId, browse])
   const area = browse?.area ?? path[0]?.area ?? active?.area ?? null
   const canEdit = Boolean(active && active.kind === 'doc' && (active.docType ?? 'md') === 'md' && editor)
 
@@ -130,47 +137,62 @@ export function TopBar() {
   }
 
   return (
-    <header className="topbar">
-      <div className="breadcrumb">
-        {area ? (
-          <>
-            <button
-              type="button"
-              className={`crumb crumb-button${
-                browse && browse.folderId === null ? ' current' : ''
-              }`}
-              onClick={() => openArea(area)}
-            >
-              {AREA_LABEL[area]}
-            </button>
-            {path.map((node) => {
-              const current = browse ? node.id === browse.folderId : node.id === activeId
-              const clickable = node.kind === 'folder'
-
-              return (
-                <Fragment key={node.id}>
-                  <ChevronRight size={13} className="crumb-sep" />
-                  {clickable ? (
-                    <button
-                      type="button"
-                      className={`crumb crumb-button${current ? ' current' : ''}`}
-                      title={node.name}
-                      onClick={() => openFolder(node.area, node.id)}
-                    >
-                      {node.name || '未命名'}
-                    </button>
-                  ) : (
-                    <span className={`crumb${current ? ' current' : ''}`} title={node.name}>
-                      {node.name || '未命名'}
-                    </span>
-                  )}
-                </Fragment>
-              )
-            })}
-          </>
-        ) : (
-          <span className="crumb current">AINoteBook</span>
+    <header className={`topbar${trashOpen ? ' in-trash' : ''}`}>
+      <div className="topbar-lead">
+        {!sidebarOpen && (
+          <button
+            type="button"
+            className="icon-button"
+            title="展开侧栏"
+            aria-label="展开侧栏"
+            onClick={toggleSidebar}
+          >
+            <PanelLeftOpen size={16} />
+          </button>
         )}
+        <div className="breadcrumb">
+          {trashOpen ? (
+            <span className="crumb current">回收站</span>
+          ) : area ? (
+            <>
+              <button
+                type="button"
+                className={`crumb crumb-button${
+                  browse && browse.folderId === null ? ' current' : ''
+                }`}
+                onClick={() => openArea(area)}
+              >
+                {AREA_LABEL[area]}
+              </button>
+              {path.map((node) => {
+                const current = browse ? node.id === browse.folderId : node.id === activeId
+                const clickable = node.kind === 'folder'
+
+                return (
+                  <Fragment key={node.id}>
+                    <ChevronRight size={13} className="crumb-sep" />
+                    {clickable ? (
+                      <button
+                        type="button"
+                        className={`crumb crumb-button${current ? ' current' : ''}`}
+                        title={node.name}
+                        onClick={() => openFolder(node.area, node.id)}
+                      >
+                        {node.name || '未命名'}
+                      </button>
+                    ) : (
+                      <span className={`crumb${current ? ' current' : ''}`} title={node.name}>
+                        {node.name || '未命名'}
+                      </span>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </>
+          ) : (
+            <span className="crumb current">AINoteBook</span>
+          )}
+        </div>
       </div>
 
       <div className="topbar-actions">
@@ -274,6 +296,8 @@ export function TopBar() {
             />
           )}
         </div>
+
+        <BackupMenu />
 
         <input
           ref={mdInputRef}

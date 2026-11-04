@@ -1,4 +1,14 @@
-import { Database, FileText, Folder, Moon, NotebookPen, Plus, Sun } from 'lucide-react'
+import {
+  Database,
+  FileText,
+  Folder,
+  Moon,
+  NotebookPen,
+  PanelLeftClose,
+  Plus,
+  Sun,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useState, type DragEvent as ReactDragEvent } from 'react'
 import { showMoveResult } from './moveFeedback'
 import { formatBytes } from '../../lib/storageInfo'
@@ -7,9 +17,9 @@ import {
   getDraggedNodeId,
   setDraggedNodeId,
 } from '../../lib/treeDrag'
-import { compareOrder } from '../../lib/fractionalIndex'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
+import { useTreeIndex } from '../../store/useTreeIndex'
 import { useUiStore } from '../../store/useUiStore'
 import type { Area, NodeKind } from '../../types'
 import { NameDialog } from '../common/Dialogs'
@@ -27,14 +37,18 @@ interface CreateFor {
 }
 
 export function Sidebar() {
-  const nodes = useNoteStore((state) => state.nodes)
+  const index = useTreeIndex()
   const theme = useNoteStore((state) => state.theme)
   const toggleTheme = useNoteStore((state) => state.toggleTheme)
   const createNode = useNoteStore((state) => state.createNode)
   const browse = useNavigationStore((state) => state.browse)
+  const trashOpen = useNavigationStore((state) => state.trashOpen)
+  const openTrash = useNavigationStore((state) => state.openTrash)
   const openArea = useNavigationStore((state) => state.openArea)
   const storageInfo = useUiStore((state) => state.storageInfo)
   const refreshStorage = useUiStore((state) => state.refreshStorage)
+  const toggleSidebar = useUiStore((state) => state.toggleSidebar)
+  const trashCount = index.trashRoots.length
 
   const [menuArea, setMenuArea] = useState<Area | null>(null)
   const [createFor, setCreateFor] = useState<CreateFor | null>(null)
@@ -53,7 +67,7 @@ export function Sidebar() {
     if (!event.dataTransfer.types.includes('application/x-ainb-node')) return
 
     const dragId = getDraggedNodeId()
-    if (!dragId || !canDropOnArea(nodes, dragId)) return
+    if (!dragId || !canDropOnArea(index, dragId)) return
 
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -103,13 +117,20 @@ export function Sidebar() {
           <strong>AINoteBook</strong>
           <span>本地笔记工作台</span>
         </div>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          title="收起侧栏"
+          aria-label="收起侧栏"
+          onClick={toggleSidebar}
+        >
+          <PanelLeftClose size={16} />
+        </button>
       </div>
 
       <div className="sidebar-scroll">
         {SECTIONS.map((section) => {
-          const roots = nodes
-            .filter((node) => node.area === section.area && node.parentId === null)
-            .sort((a, b) => compareOrder(a.order, b.order))
+          const roots = index.roots.get(section.area) ?? []
           return (
             <section className="tree-section" key={section.area}>
               <div
@@ -157,7 +178,7 @@ export function Sidebar() {
 
               {roots.length > 0 ? (
                 roots.map((node) => (
-                  <TreeItem key={node.id} node={node} depth={0} nodes={nodes} />
+                  <TreeItem key={node.id} node={node} depth={0} index={index} />
                 ))
               ) : (
                 <div className="tree-empty">点击 + 新建文件夹或文档</div>
@@ -168,6 +189,18 @@ export function Sidebar() {
       </div>
 
       <div className="sidebar-footer">
+        <button
+          type="button"
+          className={`sidebar-footer-action sidebar-trash${
+            trashOpen ? ' active' : ''
+          }`}
+          title="打开回收站"
+          onClick={openTrash}
+        >
+          <Trash2 size={14} />
+          <span>回收站</span>
+          <span className="trash-count">{trashCount}</span>
+        </button>
         <button type="button" className="theme-toggle" onClick={toggleTheme}>
           {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           <span>{theme === 'dark' ? '浅色模式' : '深色模式'}</span>

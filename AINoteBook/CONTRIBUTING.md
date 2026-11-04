@@ -47,6 +47,7 @@ npm run check
 
 - 树元数据存 `ainb.tree.v2`，Markdown 正文只存 `ainb.node.<id>`；不要再给 `TreeNode` 加回 `content`
 - 读取正文使用 `loadNodeContent` 或 store 的 `readContent`（会优先返回尚未落盘的待保存内容）
+- 树查询不要反复扫描扁平数组：组件用 `useTreeIndex()`、领域/用例用 `getTreeIndex(nodes)`，通过 `byId` / `activeChildren` / `trashRoots` 读取
 - 新节点必须生成 fractional-index `order`；兄弟排序用 `compareOrder`
 - 附件关系使用 `doc.attachmentFolderId` 与 `folder.ownerDocId` 双向关联，不要按名称反查
 - 旧 `ainb.tree.v1` 只用于迁移，不再写入

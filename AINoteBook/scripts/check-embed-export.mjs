@@ -347,7 +347,7 @@ assert.ok(attachmentMarkdown.includes('嵌入 Markdown 内容可见'), '附件 M
     await page.waitForSelector('.popup-menu')
     for (const button of await page.$$('.popup-menu button')) {
       const label = await button.evaluate((element) => element.textContent ?? '')
-      if (label.includes('删除')) {
+      if (label.includes('回收站')) {
         await button.click()
         break
       }

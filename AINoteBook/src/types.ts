@@ -16,6 +16,8 @@ export interface TreeNode {
   attachmentFolderId?: string
   /** 附件文件夹指向所属主文档 */
   ownerDocId?: string
+  /** 移入回收站的时间；未删除时不存在 */
+  deletedAt?: number
   createdAt: number
   updatedAt: number
 }

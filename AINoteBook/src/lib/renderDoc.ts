@@ -39,7 +39,13 @@ const EmbedPlaceholder = Node.create({
   renderHTML({ node }) {
     return [
       'div',
-      { 'data-type': 'documentEmbed', class: 'embed-placeholder' },
+      {
+        'data-type': 'documentEmbed',
+        'data-doc-id': String(node.attrs.docId ?? ''),
+        'data-doc-type': String(node.attrs.docType ?? 'md'),
+        'data-name': String(node.attrs.name || '嵌入文档'),
+        class: 'embed-placeholder',
+      },
       ['span', { class: 'embed-placeholder-icon' }, '📄'],
       ['span', {}, String(node.attrs.name || '嵌入文档')],
     ]

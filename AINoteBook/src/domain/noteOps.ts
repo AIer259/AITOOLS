@@ -1,8 +1,18 @@
 import type { JSONContent } from '@tiptap/core'
 import type { Area, DocType, NodeKind, TreeNode } from '../types'
 import { attachmentFolderName, isAttachmentFolderName } from '../lib/embedRefs'
-import { generateKeyBetween, nextOrder } from '../lib/fractionalIndex'
-import { findFolder, firstDoc, getDescendantIds } from '../lib/tree'
+import {
+  compareOrder,
+  generateKeyBetween,
+  nextOrder,
+} from '../lib/fractionalIndex'
+import { findFolder, getDescendantIds } from '../lib/tree'
+import { getTreeIndex, type TreeIndex } from '../lib/treeIndex'
+import {
+  getTrashBundleIds,
+  getTrashRoot,
+  isSharedAttachmentFolder,
+} from '../lib/trash'
 import {
   isAttachmentFolder,
   isEmbeddedNode,
@@ -32,7 +42,7 @@ export interface CreateNodePlan {
 }
 
 export function planCreateNode(
-  nodes: TreeNode[],
+  index: TreeIndex,
   expandedState: Record<string, boolean>,
   input: CreateNodeInput,
   id: string,
@@ -41,8 +51,8 @@ export function planCreateNode(
   const fallback = input.kind === 'doc' ? '未命名文档' : '新建文件夹'
   const finalName = input.name.trim() || fallback
   const finalDocType = input.docType ?? 'md'
-  const siblings = nodes.filter(
-    (item) => item.area === input.area && item.parentId === input.parentId,
+  const siblings = (index.children.get(input.parentId) ?? []).filter(
+    (item) => item.area === input.area,
   )
   const order = input.order ?? nextOrder(siblings.map((item) => item.order))
   const node: TreeNode = {
@@ -62,10 +72,10 @@ export function planCreateNode(
       : {}),
   }
 
-  const nextNodes = [...nodes, node]
+  const nextNodes = [...index.nodes, node]
   const expanded = { ...expandedState }
   const parentNode = input.parentId
-    ? nodes.find((item) => item.id === input.parentId)
+    ? index.byId.get(input.parentId)
     : undefined
   if (
     input.parentId &&
@@ -91,43 +101,44 @@ export interface MovePlan {
 }
 
 export function planMoveNode(
-  nodes: TreeNode[],
+  index: TreeIndex,
   expandedState: Record<string, boolean>,
   id: string,
   target: MoveTarget,
   options?: MoveOptions,
   now = Date.now(),
 ): MovePlan {
-  const node = nodes.find((item) => item.id === id)
-  if (!node) return { result: 'invalid', nodes, expanded: expandedState }
+  const node = index.byId.get(id)
+  if (!node) return { result: 'invalid', nodes: [...index.nodes], expanded: expandedState }
 
   const targetFolder = target.parentId
-    ? nodes.find((item) => item.id === target.parentId)
+    ? index.byId.get(target.parentId)
     : undefined
-  if (target.parentId && targetFolder?.kind !== 'folder') {
-    return { result: 'invalid', nodes, expanded: expandedState }
+  if (
+    target.parentId &&
+    (!targetFolder || targetFolder.kind !== 'folder' || Boolean(targetFolder.deletedAt))
+  ) {
+    return { result: 'invalid', nodes: [...index.nodes], expanded: expandedState }
   }
-  if (isAttachmentFolder(nodes, node) || isEmbeddedNode(nodes, node)) {
-    return { result: 'invalid', nodes, expanded: expandedState }
+  if (isAttachmentFolder(node) || isEmbeddedNode(index, node)) {
+    return { result: 'invalid', nodes: [...index.nodes], expanded: expandedState }
   }
   if (
     targetFolder &&
     !options?.allowAttachmentTarget &&
-    (isAttachmentFolder(nodes, targetFolder) || isEmbeddedNode(nodes, targetFolder))
+    (isAttachmentFolder(targetFolder) || isEmbeddedNode(index, targetFolder))
   ) {
-    return { result: 'invalid', nodes, expanded: expandedState }
+    return { result: 'invalid', nodes: [...index.nodes], expanded: expandedState }
   }
 
   // 根节点集合：普通节点自身；主文档还包括显式关联的附件文件夹
   const rootIds = new Set<string>([id])
   if (node.kind === 'doc' && node.attachmentFolderId) {
-    const folder = nodes.find(
-      (item) => item.id === node.attachmentFolderId && item.kind === 'folder',
-    )
-    if (folder) {
-      const conflict = findFolder(nodes, target.area, target.parentId, folder.name)
+    const folder = index.byId.get(node.attachmentFolderId)
+    if (folder?.kind === 'folder') {
+      const conflict = findFolder(index, target.area, target.parentId, folder.name)
       if (conflict && conflict.id !== folder.id) {
-        return { result: 'conflict', nodes, expanded: expandedState }
+        return { result: 'conflict', nodes: [...index.nodes], expanded: expandedState }
       }
       rootIds.add(folder.id)
     }
@@ -135,28 +146,27 @@ export function planMoveNode(
 
   const movingIds = new Set<string>()
   for (const rootId of rootIds) {
-    for (const movingId of getDescendantIds(nodes, rootId)) movingIds.add(movingId)
+    for (const movingId of getDescendantIds(index, rootId)) movingIds.add(movingId)
   }
 
   if (node.kind === 'folder' && target.parentId && movingIds.has(target.parentId)) {
-    return { result: 'invalid', nodes, expanded: expandedState }
+    return { result: 'invalid', nodes: [...index.nodes], expanded: expandedState }
   }
 
   // 换父级时把移动的根节点追加到目标目录末尾；保留已有顺序
   let orderCursor = ''
-  for (const item of nodes) {
+  for (const item of index.children.get(target.parentId) ?? []) {
     if (
       item.area === target.area &&
-      item.parentId === target.parentId &&
       !movingIds.has(item.id) &&
-      item.order > orderCursor
+      compareOrder(item.order, orderCursor) > 0
     ) {
       orderCursor = item.order
     }
   }
   const nextOrders = new Map<string, string>()
   for (const rootId of rootIds) {
-    const root = nodes.find((item) => item.id === rootId)
+    const root = index.byId.get(rootId)
     if (!root) continue
     if (root.area === target.area && root.parentId === target.parentId) {
       nextOrders.set(rootId, root.order)
@@ -167,7 +177,7 @@ export function planMoveNode(
     orderCursor = order
   }
 
-  const nextNodes = nodes.map((item) => {
+  const nextNodes = index.nodes.map((item) => {
     if (!movingIds.has(item.id)) return item
     const root = rootIds.has(item.id)
     return {
@@ -188,46 +198,161 @@ export function planMoveNode(
   return { result: 'ok', nodes: nextNodes, expanded }
 }
 
-export interface DeletePlan {
+export interface TrashPlan {
+  nodes: TreeNode[]
+  trashedIds: Set<string>
+  activeIdFallback: string | null
+}
+
+export function planTrashNode(
+  index: TreeIndex,
+  id: string,
+  now = Date.now(),
+): TrashPlan | null {
+  const target = index.byId.get(id)
+  if (!target || target.deletedAt) return null
+  // 附件文件夹只能随主文档一起移入回收站
+  if (isAttachmentFolder(target)) return null
+
+  const ids = getDescendantIds(index, id)
+
+  if (target.kind === 'doc' && target.attachmentFolderId) {
+    const folder = index.byId.get(target.attachmentFolderId)
+    const shared =
+      folder && !folder.deletedAt
+        ? isSharedAttachmentFolder(index, folder.id, target.id)
+        : false
+
+    if (folder && !shared) {
+      for (const folderId of getDescendantIds(index, folder.id)) ids.add(folderId)
+    }
+  }
+
+  const nextNodes = index.nodes.map((node) =>
+    ids.has(node.id) ? { ...node, deletedAt: node.deletedAt ?? now } : node,
+  )
+  const activeIdFallback =
+    index.activeDocs.find((doc) => !ids.has(doc.id))?.id ?? null
+
+  return {
+    nodes: nextNodes,
+    trashedIds: ids,
+    activeIdFallback,
+  }
+}
+
+export interface RestorePlan {
+  nodes: TreeNode[]
+  expanded: Record<string, boolean>
+  root: TreeNode
+  reparented: boolean
+}
+
+function clearDeletedAt(node: TreeNode): TreeNode {
+  const restored = { ...node }
+  delete restored.deletedAt
+  return restored
+}
+
+export function planRestoreNode(
+  index: TreeIndex,
+  id: string,
+  expandedState: Record<string, boolean>,
+  now = Date.now(),
+): RestorePlan | null {
+  const root = getTrashRoot(index, id)
+  if (!root) return null
+
+  const ids = getTrashBundleIds(index, root)
+  const parent = root.parentId ? index.byId.get(root.parentId) : undefined
+  const reparented = Boolean(root.parentId && (!parent || parent.deletedAt))
+  const order = reparented
+    ? nextOrder((index.roots.get(root.area) ?? []).map((node) => node.order))
+    : root.order
+
+  const nextNodes = index.nodes.map((node) => {
+    if (!ids.has(node.id)) return node
+
+    const restored = clearDeletedAt(node)
+    const isRoot = node.id === root.id
+    return {
+      ...restored,
+      ...(isRoot && reparented ? { parentId: null, order } : {}),
+      ...(isRoot ? { updatedAt: now } : {}),
+    }
+  })
+
+  const expanded = { ...expandedState }
+  const parentId = reparented ? null : root.parentId
+  if (parentId) expanded[parentId] = true
+  if (root.kind === 'folder' && expanded[root.id] === undefined) {
+    expanded[root.id] = true
+  }
+
+  return {
+    nodes: nextNodes,
+    expanded,
+    root,
+    reparented,
+  }
+}
+
+export interface PurgePlan {
   remaining: TreeNode[]
   removed: TreeNode[]
   removedIds: Set<string>
   activeIdFallback: string | null
 }
 
-export function planDeleteNode(nodes: TreeNode[], id: string): DeletePlan | null {
-  const target = nodes.find((node) => node.id === id)
-  if (!target) return null
-
-  const ids = getDescendantIds(nodes, id)
-
-  // 删除文档时一并删除显式关联的附件文件夹
-  if (target.kind === 'doc' && target.attachmentFolderId) {
-    const folder = nodes.find((node) => node.id === target.attachmentFolderId)
-    if (folder) {
-      for (const folderId of getDescendantIds(nodes, folder.id)) ids.add(folderId)
+function detachPurgedFolders(nodes: readonly TreeNode[], removedIds: Set<string>): TreeNode[] {
+  return nodes.map((node) => {
+    if (
+      node.kind === 'doc' &&
+      node.attachmentFolderId &&
+      removedIds.has(node.attachmentFolderId)
+    ) {
+      return { ...node, attachmentFolderId: undefined, updatedAt: Date.now() }
     }
-  }
+    return node
+  })
+}
 
-  const removed = nodes.filter((node) => ids.has(node.id))
-  const remaining = nodes
-    .filter((node) => !ids.has(node.id))
-    .map((node) => {
-      if (
-        node.kind === 'doc' &&
-        node.attachmentFolderId &&
-        ids.has(node.attachmentFolderId)
-      ) {
-        return { ...node, attachmentFolderId: undefined, updatedAt: Date.now() }
-      }
-      return node
-    })
+export function planPurgeNode(index: TreeIndex, id: string): PurgePlan | null {
+  const target = index.byId.get(id)
+  if (!target?.deletedAt) return null
+
+  const root = getTrashRoot(index, id)
+  if (!root || root.id !== target.id) return null
+
+  const removedIds = getTrashBundleIds(index, target)
+  const removed = index.nodes.filter((node) => removedIds.has(node.id))
+  const remaining = detachPurgedFolders(
+    index.nodes.filter((node) => !removedIds.has(node.id)),
+    removedIds,
+  )
 
   return {
     remaining,
     removed,
-    removedIds: ids,
-    activeIdFallback: firstDoc(remaining)?.id ?? null,
+    removedIds,
+    activeIdFallback:
+      index.activeDocs.find((doc) => !removedIds.has(doc.id))?.id ?? null,
+  }
+}
+
+export function planEmptyTrash(index: TreeIndex): PurgePlan {
+  const removedIds = new Set(index.trashedIds)
+  const removed = index.nodes.filter((node) => removedIds.has(node.id))
+  const remaining = detachPurgedFolders(
+    index.nodes.filter((node) => !removedIds.has(node.id)),
+    removedIds,
+  )
+
+  return {
+    remaining,
+    removed,
+    removedIds,
+    activeIdFallback: index.activeDocs[0]?.id ?? null,
   }
 }
 
@@ -239,20 +364,20 @@ export interface EnsureFolderPlan {
 }
 
 export function planEnsureFolder(
-  nodes: TreeNode[],
+  index: TreeIndex,
   expandedState: Record<string, boolean>,
   location: { area: Area; parentId: string | null },
   name: string,
   newFolderId: string,
   now = Date.now(),
 ): EnsureFolderPlan {
-  const existing = findFolder(nodes, location.area, location.parentId, name)
+  const existing = findFolder(index, location.area, location.parentId, name)
   if (existing) {
-    return { nodes, expanded: expandedState, folder: existing, created: null }
+    return { nodes: [...index.nodes], expanded: expandedState, folder: existing, created: null }
   }
 
   const plan = planCreateNode(
-    nodes,
+    index,
     expandedState,
     {
       area: location.area,
@@ -301,34 +426,46 @@ function linkAttachmentFolder(
 }
 
 export function planAttachmentFolder(
-  nodes: TreeNode[],
+  index: TreeIndex,
   expandedState: Record<string, boolean>,
   note: TreeNode,
   newFolderId: string,
   now = Date.now(),
 ): AttachmentFolderPlan {
   if (note.attachmentFolderId) {
-    const linked = nodes.find(
-      (node) => node.id === note.attachmentFolderId && node.kind === 'folder',
-    )
-    if (linked) {
-      return linkAttachmentFolder(nodes, expandedState, note, linked, null, now)
+    const linked = index.byId.get(note.attachmentFolderId)
+    if (linked?.kind === 'folder' && !linked.deletedAt) {
+      return linkAttachmentFolder(
+        [...index.nodes],
+        expandedState,
+        note,
+        linked,
+        null,
+        now,
+      )
     }
   }
 
   // 兼容迁移前的旧数据：按名称与兄弟关系找回附件文件夹
   const legacy = findFolder(
-    nodes,
+    index,
     note.area,
     note.parentId,
     attachmentFolderName(note.name),
   )
   if (legacy) {
-    return linkAttachmentFolder(nodes, expandedState, note, legacy, null, now)
+    return linkAttachmentFolder(
+      [...index.nodes],
+      expandedState,
+      note,
+      legacy,
+      null,
+      now,
+    )
   }
 
   const plan = planEnsureFolder(
-    nodes,
+    index,
     expandedState,
     { area: note.area, parentId: note.parentId },
     attachmentFolderName(note.name),
@@ -354,7 +491,7 @@ export interface PlaceEmbeddedDocPlan {
 }
 
 export function planPlaceEmbeddedDoc(
-  nodes: TreeNode[],
+  index: TreeIndex,
   expandedState: Record<string, boolean>,
   note: TreeNode,
   doc: TreeNode,
@@ -362,10 +499,10 @@ export function planPlaceEmbeddedDoc(
   now = Date.now(),
 ): PlaceEmbeddedDocPlan {
   if (doc.kind !== 'doc') {
-    return { nodes, expanded: expandedState, doc, folder: null, moved: false }
+    return { nodes: [...index.nodes], expanded: expandedState, doc, folder: null, moved: false }
   }
 
-  const folderPlan = planAttachmentFolder(nodes, expandedState, note, newFolderId, now)
+  const folderPlan = planAttachmentFolder(index, expandedState, note, newFolderId, now)
   if (doc.parentId === folderPlan.folder.id) {
     return {
       nodes: folderPlan.nodes,
@@ -377,7 +514,7 @@ export function planPlaceEmbeddedDoc(
   }
 
   const movePlan = planMoveNode(
-    folderPlan.nodes,
+    getTreeIndex(folderPlan.nodes),
     folderPlan.expanded,
     doc.id,
     { area: folderPlan.folder.area, parentId: folderPlan.folder.id },
@@ -403,4 +540,3 @@ export function planPlaceEmbeddedDoc(
     moved: true,
   }
 }
-

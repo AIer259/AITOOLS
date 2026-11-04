@@ -1,5 +1,6 @@
 import type { NodeLocation, TreeNode } from '../types'
-import { getDescendantIds } from './tree'
+import { isAncestor } from './tree'
+import type { TreeIndex } from './treeIndex'
 
 export type MoveResult = 'ok' | 'invalid' | 'conflict'
 
@@ -21,19 +22,19 @@ export function getDraggedNodeId(): string | null {
 }
 
 /** 只有带 ownerDocId 的文件夹才是附件文件夹 */
-export function isAttachmentFolder(_nodes: TreeNode[], node: TreeNode): boolean {
+export function isAttachmentFolder(node: TreeNode): boolean {
   return node.kind === 'folder' && Boolean(node.ownerDocId)
 }
 
-/** 节点是否位于某个附件文件夹内部 */
-export function isEmbeddedNode(nodes: TreeNode[], node: TreeNode): boolean {
+/** 节点是否位于某个附件文件夹内部，复杂度 O(深度) */
+export function isEmbeddedNode(index: TreeIndex, node: TreeNode): boolean {
   let parentId = node.parentId
   let guard = 0
 
   while (parentId && guard < 100) {
-    const parent = nodes.find((item) => item.id === parentId)
+    const parent = index.byId.get(parentId)
     if (!parent) return false
-    if (isAttachmentFolder(nodes, parent)) return true
+    if (isAttachmentFolder(parent)) return true
     parentId = parent.parentId
     guard += 1
   }
@@ -42,42 +43,39 @@ export function isEmbeddedNode(nodes: TreeNode[], node: TreeNode): boolean {
 }
 
 export function findAttachmentFolder(
-  nodes: TreeNode[],
+  index: TreeIndex,
   doc: TreeNode,
 ): TreeNode | undefined {
   if (doc.kind !== 'doc' || !doc.attachmentFolderId) return undefined
-  return nodes.find(
-    (node) => node.id === doc.attachmentFolderId && node.kind === 'folder',
-  )
+  const folder = index.byId.get(doc.attachmentFolderId)
+  return folder?.kind === 'folder' && !folder.deletedAt ? folder : undefined
 }
 
-export function canDragNode(nodes: TreeNode[], node: TreeNode): boolean {
-  if (isAttachmentFolder(nodes, node)) return false
-  return !isEmbeddedNode(nodes, node)
+export function canDragNode(index: TreeIndex, node: TreeNode): boolean {
+  if (node.deletedAt || isAttachmentFolder(node)) return false
+  return !isEmbeddedNode(index, node)
 }
 
 export function canDropOnFolder(
-  nodes: TreeNode[],
+  index: TreeIndex,
   dragId: string | null,
   targetId: string,
 ): boolean {
   if (!dragId) return false
 
-  const drag = nodes.find((node) => node.id === dragId)
-  const target = nodes.find((node) => node.id === targetId)
-  if (!drag || !target || target.kind !== 'folder') return false
-  if (!canDragNode(nodes, drag)) return false
-  if (isAttachmentFolder(nodes, target) || isEmbeddedNode(nodes, target)) return false
+  const drag = index.byId.get(dragId)
+  const target = index.byId.get(targetId)
+  if (!drag || !target || target.deletedAt || target.kind !== 'folder') return false
+  if (!canDragNode(index, drag)) return false
+  if (isAttachmentFolder(target) || isEmbeddedNode(index, target)) return false
   if (target.id === drag.id) return false
-  if (drag.kind === 'folder' && getDescendantIds(nodes, drag.id).has(target.id)) {
-    return false
-  }
+  if (drag.kind === 'folder' && isAncestor(index, drag.id, target.id)) return false
 
   return true
 }
 
-export function canDropOnArea(nodes: TreeNode[], dragId: string | null): boolean {
+export function canDropOnArea(index: TreeIndex, dragId: string | null): boolean {
   if (!dragId) return false
-  const drag = nodes.find((node) => node.id === dragId)
-  return Boolean(drag && canDragNode(nodes, drag))
+  const drag = index.byId.get(dragId)
+  return Boolean(drag && !drag.deletedAt && canDragNode(index, drag))
 }

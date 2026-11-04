@@ -9,6 +9,8 @@ export interface BrowseTarget {
 
 interface NavigationStore {
   browse: BrowseTarget | null
+  trashOpen: boolean
+  openTrash: () => void
   openArea: (area: Area) => void
   openFolder: (area: Area, folderId: string) => void
   openDocument: (id: string) => void
@@ -16,10 +18,13 @@ interface NavigationStore {
 
 export const useNavigationStore = create<NavigationStore>()((set) => ({
   browse: null,
-  openArea: (area) => set({ browse: { area, folderId: null } }),
-  openFolder: (area, folderId) => set({ browse: { area, folderId } }),
+  trashOpen: false,
+  openTrash: () => set({ browse: null, trashOpen: true }),
+  openArea: (area) => set({ browse: { area, folderId: null }, trashOpen: false }),
+  openFolder: (area, folderId) =>
+    set({ browse: { area, folderId }, trashOpen: false }),
   openDocument: (id) => {
     useNoteStore.getState().setActive(id)
-    set({ browse: null })
+    set({ browse: null, trashOpen: false })
   },
 }))

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { insertDocumentEmbed } from '../../lib/documentFiles'
 import { getPath } from '../../lib/tree'
 import { useNoteStore } from '../../store/useNoteStore'
+import { useTreeIndex } from '../../store/useTreeIndex'
 import { useUiStore } from '../../store/useUiStore'
 import { AREA_LABEL, DOC_TYPE_LABEL, type DocType, type TreeNode } from '../../types'
 import { DocTypeIcon } from '../common/DocTypeIcon'
@@ -35,7 +36,7 @@ export function EmbedPicker() {
   const editor = useUiStore((state) => state.editor)
   const showToast = useUiStore((state) => state.showToast)
 
-  const nodes = useNoteStore((state) => state.nodes)
+  const index = useTreeIndex()
   const activeId = useNoteStore((state) => state.activeId)
   const ensureAttachmentFolder = useNoteStore((state) => state.ensureAttachmentFolder)
   const placeEmbeddedDoc = useNoteStore((state) => state.placeEmbeddedDoc)
@@ -49,13 +50,12 @@ export function EmbedPicker() {
 
   const docs = useMemo(() => {
     const keyword = query.trim().toLowerCase()
-    return nodes.filter(
+    return index.activeDocs.filter(
       (node) =>
-        node.kind === 'doc' &&
         node.id !== activeId &&
         (!keyword || node.name.toLowerCase().includes(keyword)),
     )
-  }, [nodes, activeId, query])
+  }, [index, activeId, query])
 
   useEffect(() => {
     if (!open) return
@@ -80,7 +80,7 @@ export function EmbedPicker() {
       showToast('当前没有可插入的编辑区', 'error')
       return
     }
-    const active = nodes.find((node) => node.id === activeId)
+    const active = index.byId.get(activeId ?? '')
     const target = active ? placeEmbeddedDoc(active, doc) : doc
     insertDocumentEmbed(editor, insertPos, target)
     closePicker()
@@ -97,14 +97,14 @@ export function EmbedPicker() {
 
     setBusy(true)
     try {
-      const active = nodes.find((node) => node.id === activeId)
+      const active = index.byId.get(activeId ?? '')
       const folder = active ? ensureAttachmentFolder(active) : null
       const target = folder ? { area: folder.area, parentId: folder.id } : undefined
       const doc =
         kind === 'md'
           ? await importDocument(file, 'md', { activate: false, target })
           : await uploadDocumentFile(file, kind, target)
-      const activeNow = nodes.find((node) => node.id === activeId)
+      const activeNow = index.byId.get(activeId ?? '')
       const placed = activeNow ? placeEmbeddedDoc(activeNow, doc) : doc
       insertDocumentEmbed(editor, insertPos, placed)
       showToast(`已嵌入「${doc.name}」`, 'success')
@@ -122,7 +122,7 @@ export function EmbedPicker() {
   }
 
   const pathLabel = (doc: TreeNode) => {
-    const parents = getPath(nodes, doc.id).slice(0, -1)
+    const parents = getPath(index, doc.id).slice(0, -1)
     return [AREA_LABEL[doc.area], ...parents.map((node) => node.name)].join(' / ')
   }
 

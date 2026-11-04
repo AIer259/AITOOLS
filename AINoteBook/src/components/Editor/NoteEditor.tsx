@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { createEditorExtensions } from '../../lib/editorExtensions'
 import { collectImageFiles, saveImageAsset } from '../../lib/imageAssets'
+import { getTreeIndex } from '../../lib/treeIndex'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useUiStore } from '../../store/useUiStore'
 import type { TreeNode } from '../../types'
@@ -116,7 +117,7 @@ export function NoteEditor({ node }: NoteEditorProps) {
   const insertImages = async (files: File[], atPos: number) => {
     if (!editor || files.length === 0) return
 
-    const active = useNoteStore.getState().nodes.find((item) => item.id === node.id)
+    const active = getTreeIndex(useNoteStore.getState().nodes).byId.get(node.id)
     const noteName = active?.name || node.name || '未命名文档'
 
     try {
