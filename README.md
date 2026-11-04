@@ -10,7 +10,7 @@
 
 ### [AINoteBook](AINoteBook/README.md)
 
-本地优先的精简 Markdown 笔记应用，当前版本 **v0.20.0**。支持工作区浏览与拖拽整理、回收站与恢复、全量备份 ZIP、Markdown + 图片跨设备导入、嵌入文档附件归档与 ZIP 往返、复杂表格、着重块、代码块语言与语法高亮、图片、目录层级折叠与 PDF 导出。
+本地优先的精简 Markdown 笔记应用，当前版本 **v0.21.0**。支持工作区浏览与拖拽整理、回收站与恢复、全量备份 ZIP 与合并恢复、Markdown + 图片跨设备导入、嵌入文档附件归档与 ZIP 往返、复杂表格、着重块、代码块语言与语法高亮、图片、目录层级折叠与 PDF 导出。
 
 **在线使用**：<https://aier259.github.io/AITOOLS/AINoteBook/>
 
