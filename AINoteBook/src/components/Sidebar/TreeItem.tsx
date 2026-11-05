@@ -35,7 +35,7 @@ interface TreeItemProps {
 
 export function TreeItem({ node, depth, index }: TreeItemProps) {
   const activeId = useNoteStore((state) => state.activeId)
-  const expanded = useNoteStore((state) => state.expanded[node.id] ?? true)
+  const expanded = useNoteStore((state) => state.expanded[node.id] ?? false)
   const browse = useNavigationStore((state) => state.browse)
   const trashOpen = useNavigationStore((state) => state.trashOpen)
   const active = activeId === node.id && !browse && !trashOpen

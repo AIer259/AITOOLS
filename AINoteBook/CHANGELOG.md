@@ -14,10 +14,11 @@
 ### Changed
 
 - 全局搜索跳转到结果后，关闭文档内搜索不再跳到文档末尾，光标停留在命中位置。
+- 左侧文件树的文件夹默认收起，刷新后保持收起；打开文档时仍自动展开其所在路径。
 
 ### Tests
 
-- 新增 `scripts/check-embed-fullscreen.mjs`、`check-embed-replace.mjs`、`check-search-replace.mjs`、`check-toc-spy.mjs`。
+- 新增 `scripts/check-embed-fullscreen.mjs`、`check-embed-replace.mjs`、`check-search-replace.mjs`、`check-toc-spy.mjs`、`check-sidebar-collapse.mjs`。
 
 ## [0.22.0] - 2026-11-05
 

@@ -217,13 +217,18 @@ try {
   await page.reload({ waitUntil: 'networkidle0' })
   await page.waitForFunction(() => document.querySelector('.note-title')?.value === '主文件')
 
-  // 附件文件夹默认折叠，展开后才能看到其中的文档
-  await page.evaluate(() => {
-    const row = [...document.querySelectorAll('.tree-row')].find(
-      (item) => item.querySelector('.row-name')?.textContent === '主文件附件',
-    )
-    row?.querySelector('.chevron-btn')?.click()
-  })
+  // 文件夹默认收起：先逐层展开，确保附件文件夹与其中的文档可见
+  await page.waitForSelector('.tree-row')
+  for (let round = 0; round < 3; round += 1) {
+    await page.evaluate(() => {
+      for (const button of document.querySelectorAll(
+        '.tree-row .chevron-btn[aria-expanded="false"]',
+      )) {
+        button.click()
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 120))
+  }
   await page.waitForFunction(() =>
     [...document.querySelectorAll('.row-name')].some((item) => item.textContent === '附件文档'),
   )

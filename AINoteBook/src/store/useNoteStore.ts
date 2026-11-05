@@ -40,12 +40,7 @@ import {
 import { createSeedData } from '../lib/seed'
 import { firstDoc } from '../lib/tree'
 import { getTreeIndex } from '../lib/treeIndex'
-import {
-  isAttachmentFolder,
-  type MoveOptions,
-  type MoveResult,
-  type MoveTarget,
-} from '../lib/treeDrag'
+import type { MoveOptions, MoveResult, MoveTarget } from '../lib/treeDrag'
 import type { DocType, NodeLocation, Theme, TreeNode } from '../types'
 
 export type SaveState = 'idle' | 'saving' | 'saved'
@@ -265,9 +260,10 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
       applyTheme(theme)
       writeActiveId(activeId)
 
+      // 默认所有文件夹收起，刷新后保持收起；打开文档时再展开其所在路径
       const expanded: Record<string, boolean> = {}
       for (const node of nodes) {
-        if (node.kind === 'folder') expanded[node.id] = !isAttachmentFolder(node)
+        if (node.kind === 'folder') expanded[node.id] = false
       }
 
       set({ nodes, activeId, theme, expanded, ready: true, saveState: 'saved' })
@@ -495,7 +491,7 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   },
 
   toggleExpanded: (id) => {
-    const current = get().expanded[id] ?? true
+    const current = get().expanded[id] ?? false
     set({ expanded: { ...get().expanded, [id]: !current } })
   },
 

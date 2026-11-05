@@ -184,6 +184,12 @@ async function clickResult(name) {
 }
 
 async function clickTreeRow(name) {
+  // 文件夹默认收起：先展开所有折叠文件夹，确保目标行可见
+  await evaluate(`(() => {
+    for (const button of document.querySelectorAll('.tree-row .chevron-btn[aria-expanded="false"]')) {
+      button.click()
+    }
+  })()`)
   await evaluate(`(() => {
     const row = [...document.querySelectorAll('.tree-row')].find(
       (item) => item.querySelector('.row-name')?.textContent === ${JSON.stringify(name)},
