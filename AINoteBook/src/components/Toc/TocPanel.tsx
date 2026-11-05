@@ -42,6 +42,30 @@ export function TocPanel() {
     setActivePos(null)
   }, [activeId])
 
+  // 正文滚动时，目录高亮跟随当前正在阅读的章节
+  useEffect(() => {
+    if (!editor) return
+    const scrollBox = editor.view.dom.closest('.note-body-scroll')
+    if (!scrollBox) return
+
+    const updateActive = () => {
+      const items = extractToc(editor)
+      const threshold = scrollBox.getBoundingClientRect().top + 40
+      let current: number | null = null
+      for (const item of items) {
+        const coords = editor.view.coordsAtPos(item.pos + 1)
+        if (!coords) continue
+        if (coords.top <= threshold) current = item.pos
+        else break
+      }
+      setActivePos(current)
+    }
+
+    updateActive()
+    scrollBox.addEventListener('scroll', updateActive, { passive: true })
+    return () => scrollBox.removeEventListener('scroll', updateActive)
+  }, [editor, activeId])
+
   const jumpTo = (item: TocItem) => {
     if (!editor) return
     editor.chain().focus().setTextSelection(item.pos + 1).scrollIntoView().run()
