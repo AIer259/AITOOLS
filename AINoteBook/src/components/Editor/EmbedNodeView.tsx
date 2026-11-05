@@ -1,7 +1,8 @@
 import type { JSONContent } from '@tiptap/core'
-import { ChevronRight, Trash2 } from 'lucide-react'
+import { ChevronRight, Maximize2, Trash2, X } from 'lucide-react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { loadBlob } from '../../lib/db'
 import { hydrateImageElements } from '../../lib/imageAssets'
 import { docJsonToHtml } from '../../lib/renderDoc'
@@ -17,6 +18,7 @@ export function EmbedNodeView(props: NodeViewProps) {
   const readContent = useNoteStore((state) => state.readContent)
 
   const [expanded, setExpanded] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [docxHtml, setDocxHtml] = useState<string | null>(null)
   const [content, setContent] = useState<JSONContent | null>(null)
@@ -27,14 +29,16 @@ export function EmbedNodeView(props: NodeViewProps) {
   const docType = (node?.docType ?? props.node.attrs.docType ?? 'md') as DocType
   const name = node?.name || String(props.node.attrs.name || '嵌入文档')
   const blobId = node?.blobId
+  const open = expanded || fullscreen
 
   const mdHtml = useMemo(
-    () => (expanded && docType === 'md' ? docJsonToHtml(content ?? undefined) : ''),
-    [expanded, docType, content],
+    () => (open && docType === 'md' ? docJsonToHtml(content ?? undefined) : ''),
+    [open, docType, content],
   )
 
   useEffect(() => {
     setExpanded(false)
+    setFullscreen(false)
     setPdfUrl(null)
     setDocxHtml(null)
     setContent(null)
@@ -42,7 +46,17 @@ export function EmbedNodeView(props: NodeViewProps) {
   }, [docId])
 
   useEffect(() => {
-    if (!expanded || docType !== 'md' || !docId) {
+    if (!fullscreen) return
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreen(false)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [fullscreen])
+
+  useEffect(() => {
+    if (!open || docType !== 'md' || !docId) {
       setContent(null)
       return
     }
@@ -67,10 +81,10 @@ export function EmbedNodeView(props: NodeViewProps) {
     return () => {
       cancelled = true
     }
-  }, [expanded, docType, docId, readContent])
+  }, [open, docType, docId, readContent])
 
   useEffect(() => {
-    if (!expanded || !mdHtml || !mdRef.current) return
+    if (!open || !mdHtml || !mdRef.current) return
 
     let cancelled = false
     let cleanup: (() => void) | undefined
@@ -84,10 +98,10 @@ export function EmbedNodeView(props: NodeViewProps) {
       cancelled = true
       cleanup?.()
     }
-  }, [expanded, mdHtml])
+  }, [open, mdHtml])
 
   useEffect(() => {
-    if (!expanded || !blobId || (docType !== 'pdf' && docType !== 'docx')) return
+    if (!open || !blobId || (docType !== 'pdf' && docType !== 'docx')) return
 
     let cancelled = false
     let objectUrl: string | null = null
@@ -127,7 +141,7 @@ export function EmbedNodeView(props: NodeViewProps) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [expanded, blobId, docType])
+  }, [open, blobId, docType])
 
   const renderBody = () => {
     if (!node) return <div className="embed-empty">引用的文档不存在或已删除</div>
@@ -185,6 +199,15 @@ export function EmbedNodeView(props: NodeViewProps) {
         </button>
         <button
           type="button"
+          className="embed-zoom"
+          title="全屏查看"
+          aria-label="全屏查看嵌入文档"
+          onClick={() => setFullscreen(true)}
+        >
+          <Maximize2 size={14} />
+        </button>
+        <button
+          type="button"
           className="embed-remove"
           title="移除嵌入"
           onClick={() => props.deleteNode()}
@@ -193,7 +216,36 @@ export function EmbedNodeView(props: NodeViewProps) {
         </button>
       </div>
 
-      {expanded && <div className="embed-body">{renderBody()}</div>}
+      {expanded && !fullscreen && <div className="embed-body">{renderBody()}</div>}
+
+      {fullscreen &&
+        createPortal(
+          <div
+            className="embed-fullscreen"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`全屏查看 ${name}`}
+          >
+            <div className="embed-fullscreen-head">
+              <span className="embed-icon">
+                <DocTypeIcon docType={docType} size={16} />
+              </span>
+              <span className="embed-name">{name}</span>
+              <span className="embed-badge">{DOC_TYPE_LABEL[docType]}</span>
+              <button
+                type="button"
+                className="embed-fullscreen-close"
+                title="关闭全屏"
+                aria-label="关闭全屏"
+                onClick={() => setFullscreen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="embed-fullscreen-body">{renderBody()}</div>
+          </div>,
+          document.body,
+        )}
     </NodeViewWrapper>
   )
 }

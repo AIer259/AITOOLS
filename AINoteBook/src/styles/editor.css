@@ -1082,6 +1082,25 @@ body.is-col-resizing * {
   color: var(--danger);
 }
 
+.embed-zoom {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.embed-zoom:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
 .embed-body {
   padding: 10px 14px 12px;
   border-top: 1px solid var(--border);
@@ -1229,6 +1248,88 @@ body.is-col-resizing * {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
+}
+
+/* ---------- 嵌入文档全屏 ---------- */
+
+.embed-fullscreen {
+  position: fixed;
+  top: 56px; /* 与 .topbar 高度一致，保留上方功能区 */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.embed-fullscreen-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.embed-fullscreen-head .embed-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.embed-fullscreen-close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.embed-fullscreen-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.embed-fullscreen-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 22px 24px;
+}
+
+.embed-fullscreen .embed-md,
+.embed-fullscreen .embed-docx {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.embed-fullscreen .embed-pdf {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.embed-fullscreen .embed-empty {
+  margin: auto;
 }
 
 .image-lightbox {
