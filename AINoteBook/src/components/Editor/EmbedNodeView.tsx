@@ -1,13 +1,14 @@
 import type { JSONContent } from '@tiptap/core'
-import { ChevronRight, Maximize2, Trash2, X } from 'lucide-react'
+import { ChevronRight, Maximize2, Trash2, Upload, X } from 'lucide-react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { loadBlob } from '../../lib/db'
+import { loadBlob, saveBlob } from '../../lib/db'
 import { hydrateImageElements } from '../../lib/imageAssets'
 import { docJsonToHtml } from '../../lib/renderDoc'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useTreeIndex } from '../../store/useTreeIndex'
+import { useUiStore } from '../../store/useUiStore'
 import { DOC_TYPE_LABEL, type DocType } from '../../types'
 import { DocTypeIcon } from '../common/DocTypeIcon'
 
@@ -19,12 +20,14 @@ export function EmbedNodeView(props: NodeViewProps) {
 
   const [expanded, setExpanded] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [revision, setRevision] = useState(0)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [docxHtml, setDocxHtml] = useState<string | null>(null)
   const [content, setContent] = useState<JSONContent | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const mdRef = useRef<HTMLDivElement>(null)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
 
   const docType = (node?.docType ?? props.node.attrs.docType ?? 'md') as DocType
   const name = node?.name || String(props.node.attrs.name || '嵌入文档')
@@ -141,7 +144,20 @@ export function EmbedNodeView(props: NodeViewProps) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [open, blobId, docType])
+  }, [open, blobId, docType, revision])
+
+  const handleReplace = async (file: File) => {
+    if (!blobId) return
+    try {
+      const buffer = await file.arrayBuffer()
+      await saveBlob(blobId, buffer)
+      setRevision((value) => value + 1)
+      useUiStore.getState().showToast('附件已替换，标注已保存', 'success')
+    } catch (replaceError) {
+      console.error(replaceError)
+      useUiStore.getState().showToast('替换失败，请重试', 'error')
+    }
+  }
 
   const renderBody = () => {
     if (!node) return <div className="embed-empty">引用的文档不存在或已删除</div>
@@ -197,6 +213,17 @@ export function EmbedNodeView(props: NodeViewProps) {
           <span className="embed-name">{name}</span>
           <span className="embed-badge">{DOC_TYPE_LABEL[docType]}</span>
         </button>
+        {docType === 'pdf' && (
+          <button
+            type="button"
+            className="embed-replace"
+            title="替换附件（导入带标注的 PDF）"
+            aria-label="替换附件"
+            onClick={() => replaceInputRef.current?.click()}
+          >
+            <Upload size={14} />
+          </button>
+        )}
         <button
           type="button"
           className="embed-zoom"
@@ -232,6 +259,22 @@ export function EmbedNodeView(props: NodeViewProps) {
               </span>
               <span className="embed-name">{name}</span>
               <span className="embed-badge">{DOC_TYPE_LABEL[docType]}</span>
+              {docType === 'pdf' && (
+                <>
+                  <span className="embed-fullscreen-hint">
+                    标注请点阅读器「下载」，再用「替换附件」保存
+                  </span>
+                  <button
+                    type="button"
+                    className="embed-fullscreen-replace"
+                    title="替换附件"
+                    onClick={() => replaceInputRef.current?.click()}
+                  >
+                    <Upload size={15} />
+                    替换附件
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="embed-fullscreen-close"
@@ -246,6 +289,18 @@ export function EmbedNodeView(props: NodeViewProps) {
           </div>,
           document.body,
         )}
+
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) void handleReplace(file)
+        }}
+      />
     </NodeViewWrapper>
   )
 }

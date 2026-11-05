@@ -1101,6 +1101,25 @@ body.is-col-resizing * {
   color: var(--text);
 }
 
+.embed-replace {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.embed-replace:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+
 .embed-body {
   padding: 10px 14px 12px;
   border-top: 1px solid var(--border);
@@ -1302,6 +1321,33 @@ body.is-col-resizing * {
 .embed-fullscreen-close:hover {
   background: var(--hover);
   color: var(--text);
+}
+
+.embed-fullscreen-hint {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.embed-fullscreen-replace {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.embed-fullscreen-replace:hover {
+  filter: brightness(1.06);
 }
 
 .embed-fullscreen-body {
