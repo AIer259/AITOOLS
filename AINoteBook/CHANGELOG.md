@@ -2,6 +2,23 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 嵌入文档卡片新增「全屏」按钮，全屏浮层铺满顶栏以下区域（顶栏保留可操作），右上角或 `Esc` 关闭返回主文档。
+- 嵌入 PDF 卡片与全屏浮层新增「替换附件」：在 Chrome 阅读器中标注后，点阅读器「下载」导出带标注 PDF，再用「替换附件」覆盖原附件，实现标注半自动保存。
+- 文档内搜索新增「替换」与「全部替换」，支持替换为空（即删除匹配）；搜索结果数量随正文编辑实时刷新。
+- 目录面板高亮跟随正文滚动，自动定位当前阅读章节。
+
+### Changed
+
+- 全局搜索跳转到结果后，关闭文档内搜索不再跳到文档末尾，光标停留在命中位置。
+
+### Tests
+
+- 新增 `scripts/check-embed-fullscreen.mjs`、`check-embed-replace.mjs`、`check-search-replace.mjs`、`check-toc-spy.mjs`。
+
 ## [0.22.0] - 2026-11-05
 
 ### Added
