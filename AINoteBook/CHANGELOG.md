@@ -10,6 +10,8 @@
 - 嵌入 PDF 卡片与全屏浮层新增「替换附件」：在 Chrome 阅读器中标注后，点阅读器「下载」导出带标注 PDF，再用「替换附件」覆盖原附件，实现标注半自动保存。
 - 文档内搜索新增「替换」与「全部替换」，支持替换为空（即删除匹配）；搜索结果数量随正文编辑实时刷新。
 - 目录面板高亮跟随正文滚动，自动定位当前阅读章节。
+- 数学公式：斜杠命令插入行内 / 块级公式，正文输入 `$...$` 自动转为行内公式；点击公式打开编辑框（LaTeX 输入 + 实时预览，可删除），KaTeX 渲染；Markdown 导出保留 LaTeX 源。
+- 公式图片识别：编辑框内上传公式图片，用浏览器本地模型（texify）自动识别为 LaTeX；首次使用需下载约 360MB 模型并缓存，之后离线，图片不上传。
 
 ### Changed
 
@@ -18,7 +20,7 @@
 
 ### Tests
 
-- 新增 `scripts/check-embed-fullscreen.mjs`、`check-embed-replace.mjs`、`check-search-replace.mjs`、`check-toc-spy.mjs`、`check-sidebar-collapse.mjs`。
+- 新增 `scripts/check-embed-fullscreen.mjs`、`check-embed-replace.mjs`、`check-search-replace.mjs`、`check-toc-spy.mjs`、`check-sidebar-collapse.mjs`、`check-math.mjs`。
 
 ## [0.22.0] - 2026-11-05
 

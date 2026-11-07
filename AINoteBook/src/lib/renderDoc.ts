@@ -7,6 +7,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { Callout } from '../extensions/Callout'
 import { CodeBlock } from '../extensions/CodeBlock'
 import { EnhancedTable } from '../extensions/EnhancedTable'
+import { MathBlock, MathInline } from '../extensions/Math'
 import { highlightCodeInHtml } from './codeHighlight'
 
 const EmbedPlaceholder = Node.create({
@@ -115,6 +116,8 @@ function createRenderExtensions(): Extensions {
     TaskList,
     TaskItem.configure({ nested: true }),
     Callout,
+    MathInline,
+    MathBlock,
     EmbedPlaceholder,
     RenderImage,
   ]

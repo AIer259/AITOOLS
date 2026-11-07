@@ -9,6 +9,7 @@ import { Callout } from '../extensions/Callout'
 import { CodeBlock } from '../extensions/CodeBlock'
 import { DocumentEmbed } from '../extensions/DocumentEmbed'
 import { EnhancedTable } from '../extensions/EnhancedTable'
+import { MathBlock, MathInline } from '../extensions/Math'
 import { NoteImage } from '../extensions/NoteImage'
 import { SearchHighlight } from '../extensions/SearchHighlight'
 import { SlashCommand } from '../extensions/SlashCommand'
@@ -51,6 +52,8 @@ export function createEditorExtensions(): Extensions {
     Callout,
     NoteImage,
     DocumentEmbed,
+    MathInline,
+    MathBlock,
     SlashCommand,
     SearchHighlight,
   ]

@@ -38,6 +38,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
     "@tiptap/core": "^3.32.2",
     "@tiptap/extension-code-block-lowlight": "^3.32.2",
     "@tiptap/extension-details": "^3.32.2",
@@ -54,6 +55,7 @@
     "idb-keyval": "^6.3.0",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
+    "katex": "^0.19.1",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.66.0",
     "mammoth": "^1.13.0",

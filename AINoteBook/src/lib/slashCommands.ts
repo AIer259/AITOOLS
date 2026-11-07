@@ -17,6 +17,7 @@ export type SlashIcon =
   | 'table'
   | 'toggle'
   | 'embed'
+  | 'math'
 
 export interface SlashItem {
   id: string
@@ -191,6 +192,26 @@ export const SLASH_ITEMS: SlashItem[] = [
     run: (editor, range) => {
       start(editor, range).run()
     },
+  },
+  {
+    id: 'mathInline',
+    title: '行内公式',
+    hint: '行内 LaTeX 公式，如 E=mc^2',
+    icon: 'math',
+    pinyin: ['gongshi', 'gs', 'xingneigongshi', 'shuxue'],
+    keywords: ['math', 'latex', 'formula', 'inline', '公式', '数学', '行内公式'],
+    run: (editor, range) =>
+      start(editor, range).insertContent({ type: 'mathInline', attrs: { latex: '' } }).run(),
+  },
+  {
+    id: 'mathBlock',
+    title: '块级公式',
+    hint: '独立居中的 LaTeX 公式块',
+    icon: 'math',
+    pinyin: ['kuangongshi', 'kgs', 'kuaigongshi', 'shuxuekuai'],
+    keywords: ['mathblock', 'latex', 'formula', 'block', '公式块', '块公式', '数学'],
+    run: (editor, range) =>
+      start(editor, range).insertContent({ type: 'mathBlock', attrs: { latex: '' } }).run(),
   },
 ]
 

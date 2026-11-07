@@ -14,6 +14,7 @@ import {
   Minus,
   Pilcrow,
   Quote,
+  Sigma,
   Table2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -47,6 +48,7 @@ const ICONS: Record<SlashIcon, LucideIcon> = {
   table: Table2,
   toggle: ChevronRight,
   embed: FileInput,
+  math: Sigma,
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(

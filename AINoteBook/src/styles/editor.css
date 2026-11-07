@@ -1685,3 +1685,186 @@ body.is-col-resizing * {
 .link-dialog-actions.no-remove {
   justify-content: flex-end;
 }
+
+/* ---------- 数学公式 ---------- */
+
+.math-node {
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.math-node:hover {
+  background: var(--hover);
+}
+
+.math-inline {
+  display: inline-block;
+  padding: 0 2px;
+  vertical-align: middle;
+}
+
+.math-block {
+  display: block;
+  margin: 0.9em 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  text-align: center;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.math-block .katex-display {
+  margin: 0;
+}
+
+.math-render {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.math-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.math-error {
+  color: var(--danger);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.math-dialog {
+  width: min(520px, calc(100vw - 40px));
+}
+
+.math-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.math-field > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.math-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.math-field textarea:focus {
+  border-color: var(--accent);
+}
+
+.math-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.math-preview-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.math-preview-body {
+  min-height: 44px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.math-preview-body.is-block {
+  text-align: center;
+}
+
+.math-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.math-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--danger);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.math-delete:hover {
+  background: var(--hover);
+}
+
+.math-ocr {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.math-ocr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.math-ocr-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.math-ocr-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.math-ocr-thumb {
+  max-width: 160px;
+  max-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.math-ocr-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.math-ocr-status.error {
+  color: var(--danger);
+}

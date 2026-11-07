@@ -343,6 +343,22 @@ export function buildMarkdownFromHtml(
       node.nodeName === 'DIV' && (node as HTMLElement).hasAttribute('data-doc-embed'),
     replacement: (_content, node) => `\n\n${(node as HTMLElement).outerHTML}\n\n`,
   })
+  service.addRule('mathInline', {
+    filter: (node) =>
+      node.nodeName === 'SPAN' && (node as HTMLElement).hasAttribute('data-math-inline'),
+    replacement: (_content, node) => {
+      const latex = (node as HTMLElement).getAttribute('data-latex') ?? ''
+      return latex ? `$${latex}$` : ''
+    },
+  })
+  service.addRule('mathBlock', {
+    filter: (node) =>
+      node.nodeName === 'DIV' && (node as HTMLElement).hasAttribute('data-math-block'),
+    replacement: (_content, node) => {
+      const latex = (node as HTMLElement).getAttribute('data-latex') ?? ''
+      return latex ? `\n\n$$\n${latex}\n$$\n\n` : ''
+    },
+  })
 
   const container = document.createElement('div')
   container.innerHTML = normalizeExportHtml(html, { embedPaths })

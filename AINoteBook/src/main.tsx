@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { STORAGE_KEYS } from './lib/constants'
+import 'katex/dist/katex.min.css'
 import './styles/global.css'
 import './styles/editor.css'
 
