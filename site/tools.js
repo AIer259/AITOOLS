@@ -2,7 +2,7 @@ const tools = [
   {
     name: 'AINoteBook',
     description:
-      '本地优先的精简 Markdown 笔记应用，支持复杂表格、代码高亮、嵌入文档与 PDF 导出。',
+      '本地优先的精简 Markdown 笔记应用，支持数学公式、复杂表格、代码高亮、嵌入文档与 PDF 导出。',
     href: './AINoteBook/',
     icon: '📝',
     tags: ['Markdown', '笔记', 'PDF'],
