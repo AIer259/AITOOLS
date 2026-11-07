@@ -1,4 +1,4 @@
-import { FilePlus2, Folder, FolderPlus } from 'lucide-react'
+import { FilePlus2, Folder, FolderPlus, Network } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
@@ -21,7 +21,7 @@ export function WorkspaceView() {
   const index = useTreeIndex()
   const createNode = useNoteStore((state) => state.createNode)
 
-  const [createKind, setCreateKind] = useState<NodeKind | null>(null)
+  const [createKind, setCreateKind] = useState<NodeKind | 'graph' | null>(null)
 
   const folderNode = browse?.folderId
     ? index.byId.get(browse.folderId)
@@ -53,6 +53,10 @@ export function WorkspaceView() {
           <button type="button" className="btn ghost" onClick={() => setCreateKind('folder')}>
             <FolderPlus size={14} />
             新建文件夹
+          </button>
+          <button type="button" className="btn ghost" onClick={() => setCreateKind('graph')}>
+            <Network size={14} />
+            新建关系图
           </button>
           <button type="button" className="btn primary" onClick={() => setCreateKind('doc')}>
             <FilePlus2 size={14} />
@@ -94,19 +98,29 @@ export function WorkspaceView() {
 
       {createKind && (
         <NameDialog
-          title={`在「${locationName}」中新建${createKind === 'doc' ? '文档' : '文件夹'}`}
-          defaultValue={createKind === 'doc' ? '未命名文档' : '新建文件夹'}
+          title={`在「${locationName}」中新建${
+            createKind === 'folder' ? '文件夹' : createKind === 'graph' ? '关系图' : '文档'
+          }`}
+          defaultValue={
+            createKind === 'folder'
+              ? '新建文件夹'
+              : createKind === 'graph'
+                ? '未命名关系图'
+                : '未命名文档'
+          }
           confirmText="创建"
           onCancel={() => setCreateKind(null)}
           onConfirm={(name) => {
+            const isFolder = createKind === 'folder'
             const id = createNode({
               area: browse.area,
               parentId,
-              kind: createKind,
+              kind: isFolder ? 'folder' : 'doc',
+              ...(createKind === 'graph' ? { docType: 'graph' as const } : {}),
               name,
             })
             setCreateKind(null)
-            if (createKind === 'doc') openDocument(id)
+            if (!isFolder) openDocument(id)
           }}
         />
       )}

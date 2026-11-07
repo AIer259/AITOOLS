@@ -2,6 +2,7 @@ import type { JSONContent } from '@tiptap/core'
 import { DOC_TYPE_META, type Area, type DocType, type TreeNode } from '../types'
 import { createBlobId, saveBlob, saveTreeWithContents } from './db'
 import { safeFolderName } from './fileExport'
+import { normalizeGraphData, type GraphData } from './graph'
 import { nextOrder } from './fractionalIndex'
 import { restoreImageAsset, type AssetMeta } from './imageAssets'
 import { getTreeIndex } from './treeIndex'
@@ -159,7 +160,7 @@ function normalizeArea(value: string | undefined): Area {
 }
 
 function normalizeDocType(value: string | undefined): DocType {
-  return value === 'pdf' || value === 'docx' ? value : 'md'
+  return value === 'pdf' || value === 'docx' || value === 'graph' ? value : 'md'
 }
 
 function newId(): string {
@@ -365,6 +366,28 @@ async function restoreFromReader(
           warnings.push(`「${node.name}」缺少正文 JSON，已按空文档恢复`)
         }
         contents.set(id, content)
+      } else if (docType === 'graph') {
+        let graph: GraphData = { nodes: [], edges: [] }
+        const text = source.contentPath
+          ? await reader.readText(source.contentPath)
+          : undefined
+        if (text !== undefined) {
+          try {
+            const parsed = normalizeGraphData(JSON.parse(text))
+            graph = {
+              nodes: parsed.nodes.map((item) => ({
+                ...item,
+                docId: idMap.get(item.docId) ?? item.docId,
+              })),
+              edges: parsed.edges,
+            }
+          } catch {
+            warnings.push(`「${node.name}」关系图数据损坏，已按空关系图恢复`)
+          }
+        } else {
+          warnings.push(`「${node.name}」缺少关系图数据，已按空关系图恢复`)
+        }
+        contents.set(id, graph as unknown as JSONContent)
       } else {
         fileCount += 1
         const blob = source.blobPath

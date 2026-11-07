@@ -3,6 +3,7 @@ import {
   FileText,
   Folder,
   Moon,
+  Network,
   NotebookPen,
   PanelLeftClose,
   Plus,
@@ -22,7 +23,7 @@ import { useNavigationStore } from '../../store/useNavigationStore'
 import { useNoteStore } from '../../store/useNoteStore'
 import { useTreeIndex } from '../../store/useTreeIndex'
 import { useUiStore } from '../../store/useUiStore'
-import type { Area, NodeKind } from '../../types'
+import type { Area, DocType, NodeKind } from '../../types'
 import { NameDialog } from '../common/Dialogs'
 import { PopupMenu } from '../common/PopupMenu'
 import { TreeItem } from './TreeItem'
@@ -35,6 +36,7 @@ const SECTIONS: { area: Area; label: string }[] = [
 interface CreateFor {
   area: Area
   kind: NodeKind
+  docType?: DocType
 }
 
 export function Sidebar() {
@@ -181,6 +183,12 @@ export function Sidebar() {
                         onSelect: () => setCreateFor({ area: section.area, kind: 'doc' }),
                       },
                       {
+                        label: '新建关系图',
+                        icon: <Network size={14} />,
+                        onSelect: () =>
+                          setCreateFor({ area: section.area, kind: 'doc', docType: 'graph' }),
+                      },
+                      {
                         label: '新建文件夹',
                         icon: <Folder size={14} />,
                         onSelect: () => setCreateFor({ area: section.area, kind: 'folder' }),
@@ -240,9 +248,19 @@ export function Sidebar() {
       {createFor && (
         <NameDialog
           title={`在「${SECTIONS.find((item) => item.area === createFor.area)?.label ?? ''}」中新建${
-            createFor.kind === 'doc' ? '文档' : '文件夹'
+            createFor.kind === 'doc'
+              ? createFor.docType === 'graph'
+                ? '关系图'
+                : '文档'
+              : '文件夹'
           }`}
-          defaultValue={createFor.kind === 'doc' ? '未命名文档' : '新建文件夹'}
+          defaultValue={
+            createFor.kind === 'doc'
+              ? createFor.docType === 'graph'
+                ? '未命名关系图'
+                : '未命名文档'
+              : '新建文件夹'
+          }
           confirmText="创建"
           onCancel={() => setCreateFor(null)}
           onConfirm={(name) => {
@@ -250,6 +268,7 @@ export function Sidebar() {
               area: createFor.area,
               parentId: null,
               kind: createFor.kind,
+              ...(createFor.docType ? { docType: createFor.docType } : {}),
               name,
             })
             setCreateFor(null)

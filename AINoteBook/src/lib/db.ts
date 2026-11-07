@@ -2,6 +2,7 @@ import type { JSONContent } from '@tiptap/core'
 import { del, delMany, get, set, setMany } from 'idb-keyval'
 import type { Area, DocType, NodeKind, TreeNode } from '../types'
 import { ASSET_REF_PREFIX, collectContentAssetIds } from './assetRefs'
+import type { GraphData } from './graph'
 import {
   SEARCH_TEXT_PREFIX,
   buildSearchRecords,
@@ -126,6 +127,15 @@ export async function loadNodeContent(id: string): Promise<JSONContent | undefin
 
 export async function saveNodeContent(id: string, content: JSONContent): Promise<void> {
   await saveNodeContents(new Map([[id, content]]))
+}
+
+/** 关系图数据与正文共用 `ainb.node.<id>` 键，删除文档时一并清理 */
+export async function loadGraphData(id: string): Promise<GraphData | undefined> {
+  return get<GraphData>(NODE_PREFIX + id)
+}
+
+export async function saveGraphData(id: string, data: GraphData): Promise<void> {
+  await set(NODE_PREFIX + id, data)
 }
 
 export async function removeNodeContents(ids: Iterable<string>): Promise<void> {

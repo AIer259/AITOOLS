@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from './lib/constants'
 import 'katex/dist/katex.min.css'
 import './styles/global.css'
 import './styles/editor.css'
+import './styles/graph.css'
 
 try {
   const saved = localStorage.getItem(STORAGE_KEYS.theme)

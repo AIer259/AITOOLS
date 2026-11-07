@@ -5,6 +5,7 @@ import { EmbedPicker } from './components/Editor/EmbedPicker'
 import { FilePreview } from './components/Editor/FilePreview'
 import { NoteEditor } from './components/Editor/NoteEditor'
 import { TopBar } from './components/Editor/TopBar'
+import { GraphEditor } from './components/Graph/GraphEditor'
 import { GlobalSearchDialog } from './components/Search/GlobalSearchDialog'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TocPanel } from './components/Toc/TocPanel'
@@ -121,6 +122,7 @@ export default function App() {
   const activeNode = index.byId.get(activeId ?? '')
   const active = activeNode && !activeNode.deletedAt ? activeNode : undefined
   const isFilePreview = active?.docType === 'pdf' || active?.docType === 'docx'
+  const isGraph = active?.docType === 'graph'
   const showToc = tocOpen && !browsing && !trashOpen
 
   return (
@@ -140,7 +142,9 @@ export default function App() {
           ) : browsing ? (
             <WorkspaceView />
           ) : active ? (
-            isFilePreview ? (
+            isGraph ? (
+              <GraphEditor key={active.id} node={active} />
+            ) : isFilePreview ? (
               <FilePreview key={active.id} node={active} />
             ) : (
               <NoteEditor key={active.id} node={active} />

@@ -1,7 +1,7 @@
 import { DOC_TYPE_LABEL, type DocType, type NodeLocation, type TreeNode } from '../types'
 import type { NoteRepository } from './noteRepository'
 
-type DocumentUploadType = Exclude<DocType, 'md'>
+type DocumentUploadType = Exclude<DocType, 'md' | 'graph'>
 
 export async function uploadDocumentFile(
   repository: NoteRepository,

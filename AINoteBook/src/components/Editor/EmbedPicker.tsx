@@ -22,7 +22,7 @@ const UPLOAD_TYPES = [
 const UPLOAD_ACCEPT = UPLOAD_TYPES.flatMap((item) => [...item.extensions, item.mime]).join(',')
 const UPLOAD_ERROR = `仅支持 ${UPLOAD_TYPES.map((item) => item.label).join('、')} 文件`
 
-function detectUploadType(name: string): DocType | null {
+function detectUploadType(name: string): 'md' | 'pdf' | 'docx' | null {
   const lower = name.toLowerCase()
   return (
     UPLOAD_TYPES.find((item) => item.extensions.some((ext) => lower.endsWith(ext)))?.kind ?? null

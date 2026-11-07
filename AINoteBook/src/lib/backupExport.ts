@@ -1,8 +1,9 @@
 import type { JSONContent } from '@tiptap/core'
 import type JSZip from 'jszip'
 import { DOC_TYPE_META, type Area, type TreeNode } from '../types'
-import { loadBlob, loadNodeContent } from './db'
+import { loadBlob, loadGraphData, loadNodeContent } from './db'
 import { collectEmbeddedDocIds } from './embedRefs'
+import { buildGraphMarkdown, normalizeGraphData } from './graph'
 import {
   buildMarkdownFromHtml,
   createExportAssetCache,
@@ -191,6 +192,14 @@ export async function buildBackupZip(
 
       zip.file(path, buffer, { compression: 'STORE' })
       writtenBlobs.add(node.id)
+      continue
+    }
+
+    if (type === 'graph') {
+      const data = normalizeGraphData(await loadGraphData(node.id))
+      const resolveName = (docId: string) => index.byId.get(docId)?.name || '已删除文档'
+      zip.file(path, buildGraphMarkdown(node.name, data, resolveName))
+      zip.file(`contents/${node.id}.json`, JSON.stringify(data, null, 2))
       continue
     }
 

@@ -1,6 +1,6 @@
 export type Area = 'space' | 'private'
 export type NodeKind = 'folder' | 'doc'
-export type DocType = 'md' | 'docx' | 'pdf'
+export type DocType = 'md' | 'docx' | 'pdf' | 'graph'
 export type Theme = 'light' | 'dark'
 
 export interface TreeNode {
@@ -43,10 +43,12 @@ export const DOC_TYPE_META: Record<
     mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   },
   pdf: { label: 'PDF', extension: 'pdf', mime: 'application/pdf' },
+  graph: { label: '关系图', extension: 'md', mime: 'text/markdown' },
 }
 
 export const DOC_TYPE_LABEL: Record<DocType, string> = {
   md: DOC_TYPE_META.md.label,
   docx: DOC_TYPE_META.docx.label,
   pdf: DOC_TYPE_META.pdf.label,
+  graph: DOC_TYPE_META.graph.label,
 }

@@ -37,6 +37,7 @@ import {
   removeSearchCache,
   updateSearchCache,
 } from '../lib/searchIndex'
+import type { GraphData } from '../lib/graph'
 import { createSeedData } from '../lib/seed'
 import { firstDoc } from '../lib/tree'
 import { getTreeIndex } from '../lib/treeIndex'
@@ -70,7 +71,7 @@ interface NoteStore {
   ) => Promise<TreeNode>
   uploadDocumentFile: (
     file: File,
-    docType: Exclude<DocType, 'md'>,
+    docType: Exclude<DocType, 'md' | 'graph'>,
     target?: NodeLocation,
   ) => Promise<TreeNode>
   readContent: (id: string) => Promise<JSONContent | undefined>
@@ -83,6 +84,7 @@ interface NoteStore {
   flushSave: () => Promise<void>
   applyRestored: (nodes: TreeNode[], wrapperIds: string[]) => void
   updateContent: (id: string, content: JSONContent) => void
+  updateGraph: (id: string, data: GraphData) => void
   toggleExpanded: (id: string) => void
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
@@ -487,6 +489,12 @@ export const useNoteStore = create<NoteStore>()((set, get) => ({
   updateContent: (id, content) => {
     // 正文只进 pending，不改树数组：避免每次输入都重建索引与重渲染侧栏
     pendingContents.set(id, content)
+    scheduleSave(set)
+  },
+
+  updateGraph: (id, data) => {
+    // 关系图与正文共用保存队列和 `ainb.node.<id>` 键
+    pendingContents.set(id, data as unknown as JSONContent)
     scheduleSave(set)
   },
 
